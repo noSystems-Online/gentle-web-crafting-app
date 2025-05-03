@@ -13,6 +13,9 @@ verify_jwt = true
 [functions.webhook-handler]
 verify_jwt = false
 
+[functions.stripe-webhook-handler]
+verify_jwt = false
+
 [functions.success-handler]
 verify_jwt = true
 
@@ -21,4 +24,3 @@ verify_jwt = true
 
 [functions.rsvp-handler]
 verify_jwt = false
-

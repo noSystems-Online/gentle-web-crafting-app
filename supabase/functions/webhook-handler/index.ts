@@ -68,11 +68,11 @@ async function handleSubscriptionEvent(event: any, supabase: any) {
   const subscriptionId = resource.id;
   const status = resource.status;
   
-  // Determine plan name and interval from planId or just use the name from resource
-  let planName = 'basic';
-  if (planId) {
-    const parts = planId.split('_');
-    planName = parts[1] || 'basic';
+  // Determine plan name from planId or just use the name from resource
+  // For our app, we're only concerned with 'Pro' vs 'Free'
+  let planName = 'Free'; // Default to free
+  if (planId && planId.includes('pro')) {
+    planName = 'Pro';
   }
   
   // Calculate the next billing date based on interval
@@ -111,6 +111,7 @@ async function handleSubscriptionEvent(event: any, supabase: any) {
         .from('subscriptions')
         .update({
           status: status.toLowerCase(),
+          plan: planName, // Make sure to update plan name if it changed
           current_period_end: currentPeriodEnd.toISOString(),
         })
         .eq('paypal_subscription_id', subscriptionId);

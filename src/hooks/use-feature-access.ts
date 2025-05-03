@@ -51,10 +51,37 @@ export function useFeatureAccess() {
     return checkLimit('guests', currentGuestCount);
   };
 
+  // Check if user can access premium templates
+  const canAccessPremiumTemplate = () => {
+    if (!user) return false;
+    
+    const { hasAccess } = checkAccess('premiumTemplates');
+    return hasAccess;
+  };
+
+  // Check if user can insert QR codes in their invitations
+  const canUseQrCodes = () => {
+    if (!user) return false;
+    
+    const { hasAccess } = checkAccess('qrCodes');
+    return hasAccess;
+  };
+
+  // Get the maximum number of guests allowed per invitation
+  const getGuestLimit = () => {
+    if (!user) return 2; // Anonymous users
+    
+    const { limit } = checkAccess('guests');
+    return limit || 5; // Default to 5 if not specified (Free tier)
+  };
+
   return {
     checkAccess,
     checkLimit,
     canCreateInvitation,
-    canAddGuest
+    canAddGuest,
+    canAccessPremiumTemplate,
+    canUseQrCodes,
+    getGuestLimit
   };
 }
