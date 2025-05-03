@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Plan, useSubscription } from "@/context/SubscriptionContext";
+import { supabase } from "@/integrations/supabase/client";
 
 // Mock data for subscribers
 const mockSubscribers = [
@@ -82,7 +83,7 @@ type PlanFormData = {
 };
 
 const Admin: React.FC = () => {
-  const { supabase } = useAuth();
+  const { user } = useAuth();
   const { plans } = useSubscription();
   
   const [subscribers, setSubscribers] = useState(mockSubscribers);
