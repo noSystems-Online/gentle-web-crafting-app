@@ -1,14 +1,14 @@
 
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { createClient, SupabaseClient, Session, User } from "@supabase/supabase-js";
+import { User, Session } from "@supabase/supabase-js";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 // Types
 type AuthContextType = {
   user: User | null;
   session: Session | null;
-  supabase: SupabaseClient;
   signUp: (email: string, password: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
@@ -26,12 +26,6 @@ export type SubscriptionStatus = {
 
 // Create the context
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-// Supabase client
-const supabaseUrl = process.env.SUPABASE_URL || "https://your-supabase-url.supabase.co";
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || "your-supabase-anon-key";
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 // Provider component
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -192,7 +186,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       value={{
         user,
         session,
-        supabase,
         signUp,
         signIn,
         signOut,
