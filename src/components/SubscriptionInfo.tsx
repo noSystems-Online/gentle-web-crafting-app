@@ -44,9 +44,9 @@ const SubscriptionInfo: React.FC = () => {
     : null;
 
   const renderExpiration = () => {
-    if (!subscription?.current_period_end) return null;
+    if (!subscription?.currentPeriodEnd) return null;
     
-    const endDate = new Date(subscription.current_period_end);
+    const endDate = new Date(subscription.currentPeriodEnd);
     return (
       <p className="text-sm text-muted-foreground mt-2">
         Your subscription will {subscription.status === 'canceled' ? 'end' : 'renew'} on{" "}

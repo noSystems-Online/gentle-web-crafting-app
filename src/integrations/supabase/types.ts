@@ -9,6 +9,95 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      guests: {
+        Row: {
+          created_at: string | null
+          email: string
+          id: string
+          invitation_id: string
+          name: string
+          rsvp_message: string | null
+          rsvp_status: string | null
+          rsvp_updated_at: string | null
+          sent_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email: string
+          id?: string
+          invitation_id: string
+          name: string
+          rsvp_message?: string | null
+          rsvp_status?: string | null
+          rsvp_updated_at?: string | null
+          sent_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email?: string
+          id?: string
+          invitation_id?: string
+          name?: string
+          rsvp_message?: string | null
+          rsvp_status?: string | null
+          rsvp_updated_at?: string | null
+          sent_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "guests_invitation_id_fkey"
+            columns: ["invitation_id"]
+            isOneToOne: false
+            referencedRelation: "invitations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      invitations: {
+        Row: {
+          created_at: string | null
+          custom_design_url: string | null
+          description: string | null
+          editor_data: Json
+          id: string
+          rsvp_enabled: boolean
+          sent_at: string | null
+          status: string
+          template_id: string | null
+          title: string
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          custom_design_url?: string | null
+          description?: string | null
+          editor_data?: Json
+          id?: string
+          rsvp_enabled?: boolean
+          sent_at?: string | null
+          status?: string
+          template_id?: string | null
+          title: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          custom_design_url?: string | null
+          description?: string | null
+          editor_data?: Json
+          id?: string
+          rsvp_enabled?: boolean
+          sent_at?: string | null
+          status?: string
+          template_id?: string | null
+          title?: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -69,6 +158,39 @@ export type Database = {
           status?: string
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      templates: {
+        Row: {
+          category: string | null
+          created_at: string | null
+          description: string | null
+          id: string
+          is_premium: boolean
+          name: string
+          template_data: Json
+          thumbnail_url: string | null
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_premium?: boolean
+          name: string
+          template_data: Json
+          thumbnail_url?: string | null
+        }
+        Update: {
+          category?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_premium?: boolean
+          name?: string
+          template_data?: Json
+          thumbnail_url?: string | null
         }
         Relationships: []
       }

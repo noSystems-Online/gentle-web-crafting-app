@@ -16,3 +16,9 @@ verify_jwt = false
 [functions.success-handler]
 verify_jwt = true
 
+[functions.send-invitations]
+verify_jwt = true
+
+[functions.rsvp-handler]
+verify_jwt = false
+
