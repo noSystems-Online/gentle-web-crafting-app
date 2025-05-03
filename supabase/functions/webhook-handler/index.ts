@@ -67,11 +67,25 @@ async function handleSubscriptionEvent(event: any, supabase: any) {
 
   const subscriptionId = resource.id;
   const status = resource.status;
-  const planName = planId ? planId.replace('plan_', '').replace('_monthly', '') : 'unknown';
   
-  // Calculate the next billing date
+  // Determine plan name and interval from planId or just use the name from resource
+  let planName = 'basic';
+  if (planId) {
+    const parts = planId.split('_');
+    planName = parts[1] || 'basic';
+  }
+  
+  // Calculate the next billing date based on interval
   const currentPeriodEnd = new Date();
-  currentPeriodEnd.setMonth(currentPeriodEnd.getMonth() + 1);
+  const isYearly = planId && planId.includes('yearly');
+  
+  if (isYearly) {
+    currentPeriodEnd.setFullYear(currentPeriodEnd.getFullYear() + 1);
+  } else {
+    currentPeriodEnd.setMonth(currentPeriodEnd.getMonth() + 1);
+  }
+
+  console.log(`Processing subscription event: ${event.event_type} for user ${userId}, plan ${planName}, status ${status}`);
 
   switch (event.event_type) {
     case 'BILLING.SUBSCRIPTION.CREATED':
@@ -121,6 +135,35 @@ async function handleSubscriptionEvent(event: any, supabase: any) {
       }
       break;
       
+    case 'BILLING.SUBSCRIPTION.RENEWED':
+      // Subscription was renewed - update the end date
+      const { error: renewError } = await supabase
+        .from('subscriptions')
+        .update({
+          status: 'active',
+          current_period_end: currentPeriodEnd.toISOString(),
+        })
+        .eq('paypal_subscription_id', subscriptionId);
+        
+      if (renewError) {
+        console.error('Error renewing subscription:', renewError);
+      }
+      break;
+
+    case 'BILLING.SUBSCRIPTION.PAYMENT.FAILED':
+      // Payment failed - mark subscription as past_due
+      const { error: failError } = await supabase
+        .from('subscriptions')
+        .update({
+          status: 'past_due',
+        })
+        .eq('paypal_subscription_id', subscriptionId);
+        
+      if (failError) {
+        console.error('Error updating failed payment subscription:', failError);
+      }
+      break;
+      
     default:
       console.log(`Unhandled event type: ${event.event_type}`);
   }
@@ -142,16 +185,17 @@ serve(async (req) => {
     const body = await req.text();
     
     // Verify webhook signature
+    // In production, uncomment this validation
     // const isValid = await verifyWebhookSignature(req.headers, body);
-    // Skip verification for now as it requires a valid webhook ID
-    const isValid = true;
+    // if (!isValid) {
+    //   return new Response(JSON.stringify({ error: 'Invalid webhook signature' }), {
+    //     status: 400,
+    //     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    //   });
+    // }
     
-    if (!isValid) {
-      return new Response(JSON.stringify({ error: 'Invalid webhook signature' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
+    // For development, we'll skip verification
+    const isValid = true;
     
     const event = JSON.parse(body);
     console.log('Received webhook event:', event.event_type);

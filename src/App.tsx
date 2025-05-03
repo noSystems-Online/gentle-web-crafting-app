@@ -20,6 +20,7 @@ import Admin from "./pages/Admin";
 import Pricing from "./pages/Pricing";
 import Success from "./pages/Success";
 import NotFound from "./pages/NotFound";
+import Projects from "./pages/Projects";
 
 const queryClient = new QueryClient();
 
@@ -66,6 +67,14 @@ const App = () => (
                 element={
                   <ProtectedRoute>
                     <Billing />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/projects" 
+                element={
+                  <ProtectedRoute>
+                    <Projects />
                   </ProtectedRoute>
                 } 
               />

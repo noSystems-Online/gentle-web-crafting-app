@@ -15,8 +15,9 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Plan configuration - this would normally be stored in a database
+// Plan configuration
 const PLANS = {
+  // Monthly plans
   'plan_basic_monthly': {
     name: 'Basic',
     price: '9.99',
@@ -31,6 +32,22 @@ const PLANS = {
     name: 'Premium',
     price: '49.99',
     interval: 'MONTH',
+  },
+  // Yearly plans (20% discount)
+  'plan_basic_yearly': {
+    name: 'Basic',
+    price: '95.90', // 9.99 * 12 * 0.8
+    interval: 'YEAR',
+  },
+  'plan_pro_yearly': {
+    name: 'Pro',
+    price: '191.90', // 19.99 * 12 * 0.8
+    interval: 'YEAR',
+  },
+  'plan_premium_yearly': {
+    name: 'Premium',
+    price: '479.90', // 49.99 * 12 * 0.8
+    interval: 'YEAR',
   }
 };
 
@@ -81,7 +98,7 @@ async function createPayPalSubscription(planId: string, userId: string, token: s
     },
     body: JSON.stringify({
       product_id: product.id,
-      name: `${plan.name} Monthly Plan`,
+      name: `${plan.name} ${plan.interval === 'MONTH' ? 'Monthly' : 'Yearly'} Plan`,
       billing_cycles: [
         {
           frequency: {

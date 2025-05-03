@@ -1,197 +1,109 @@
 
-import React from "react";
-import { useAuth } from "@/context/AuthContext";
-import { useSubscription } from "@/context/SubscriptionContext";
-import DashboardLayout from "@/layouts/DashboardLayout";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Link } from "react-router-dom";
-import { Check, CreditCard, Loader2 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-
-const formatDate = (dateString: string | null) => {
-  if (!dateString) return "N/A";
-  return new Date(dateString).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  });
-};
+import React from 'react';
+import DashboardLayout from '@/layouts/DashboardLayout';
+import SubscriptionInfo from '@/components/SubscriptionInfo';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Link } from 'react-router-dom';
+import { ArrowRight, CreditCard } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
 
 const Billing: React.FC = () => {
   const { subscription } = useAuth();
-  const { plans, manageBilling, cancelSubscription, isLoading } = useSubscription();
-
-  const currentPlan = plans.find(p => p.name === subscription?.plan);
-
-  // Mock payment history
-  const paymentHistory = [
-    {
-      id: "INV-001",
-      date: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-      amount: currentPlan?.price || 0,
-      status: "Paid"
-    },
-    {
-      id: "INV-002", 
-      date: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString(),
-      amount: currentPlan?.price || 0, 
-      status: "Paid"
-    },
-    {
-      id: "INV-003",
-      date: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString(),
-      amount: currentPlan?.price || 0,
-      status: "Paid"
-    }
-  ];
-
-  const handleManageBilling = async () => {
-    await manageBilling();
-  };
-
-  const handleCancelSubscription = async () => {
-    await cancelSubscription();
-  };
 
   return (
     <DashboardLayout>
-      <div className="flex flex-col gap-8">
+      <div className="space-y-6">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight mb-2">Billing</h2>
+          <h2 className="text-3xl font-bold tracking-tight">Billing</h2>
           <p className="text-muted-foreground">
-            Manage your subscription and payment details
+            Manage your subscription and billing information
           </p>
         </div>
 
-        <div className="grid gap-8">
-          {/* Current Subscription */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Current Subscription</CardTitle>
-              <CardDescription>
-                Your current plan and subscription details
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-6">
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                  <div>
-                    <h3 className="font-semibold text-lg flex items-center gap-2">
-                      {subscription?.subscribed ? (
-                        <>
-                          {subscription.plan}
-                          <Badge variant="outline" className="ml-2 bg-green-50 text-green-700 hover:bg-green-50 border-green-200">
-                            Active
-                          </Badge>
-                        </>
-                      ) : (
-                        <>
-                          Free Plan
-                          <Badge variant="outline" className="ml-2 bg-gray-50 text-gray-700 hover:bg-gray-50 border-gray-200">
-                            No Subscription
-                          </Badge>
-                        </>
-                      )}
-                    </h3>
-                    {subscription?.subscribed && (
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Your subscription renews on {formatDate(subscription.currentPeriodEnd)}
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {subscription?.subscribed ? (
-                      <>
-                        <Button variant="outline" onClick={handleManageBilling} disabled={isLoading}>
-                          <CreditCard className="mr-2 h-4 w-4" />
-                          Manage Payment Details
-                        </Button>
-                        <Button 
-                          variant="destructive" 
-                          onClick={handleCancelSubscription}
-                          disabled={isLoading}
-                        >
-                          {isLoading ? (
-                            <>
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> 
-                              Processing...
-                            </>
-                          ) : (
-                            "Cancel Subscription"
-                          )}
-                        </Button>
-                      </>
-                    ) : (
-                      <Button asChild>
-                        <Link to="/pricing">Upgrade Plan</Link>
-                      </Button>
-                    )}
-                  </div>
-                </div>
+        <div className="grid gap-6 md:grid-cols-2">
+          <SubscriptionInfo />
+          
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Available Plans</CardTitle>
+                <CardDescription>
+                  {subscription?.subscribed 
+                    ? "Compare plans or upgrade to access more features" 
+                    : "Choose a plan to get started"}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-col items-start">
+                <p className="mb-4 text-sm text-muted-foreground">
+                  We offer three different plans to suit your needs - Basic, Pro, and Premium. Each plan includes different features and limits.
+                </p>
+                <Button asChild>
+                  <Link to="/pricing">
+                    <CreditCard className="mr-2 h-4 w-4" />
+                    View Plans
+                  </Link>
+                </Button>
+              </CardContent>
+            </Card>
 
-                {currentPlan && (
-                  <div className="mt-6">
-                    <h4 className="font-medium text-sm text-muted-foreground mb-2">
-                      Your Plan Includes:
-                    </h4>
-                    <ul className="grid gap-2">
-                      {currentPlan.features.map((feature, idx) => (
-                        <li key={idx} className="flex items-center">
-                          <Check className="h-4 w-4 text-primary mr-2" />
-                          <span className="text-sm">{feature}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
+            <Card>
+              <CardHeader>
+                <CardTitle>Payment Methods</CardTitle>
+                <CardDescription>
+                  Manage your payment methods
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-col items-start">
+                <p className="mb-4 text-sm text-muted-foreground">
+                  We securely process payments through PayPal. You can manage your payment methods and billing information directly through your PayPal account.
+                </p>
+                {subscription?.subscribed && (
+                  <Button variant="outline" onClick={() => window.location.href = 'https://www.paypal.com/myaccount/'}>
+                    Manage PayPal Account
+                  </Button>
                 )}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Payment History */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Payment History</CardTitle>
-              <CardDescription>
-                Your recent payments and invoices
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {paymentHistory.length > 0 ? (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-4 text-sm font-medium text-muted-foreground">
-                    <div>Invoice</div>
-                    <div>Date</div>
-                    <div>Amount</div>
-                    <div>Status</div>
-                  </div>
-                  <Separator />
-                  {paymentHistory.map((payment) => (
-                    <div key={payment.id} className="grid grid-cols-4 text-sm">
-                      <div className="font-medium">{payment.id}</div>
-                      <div>{formatDate(payment.date)}</div>
-                      <div>${payment.amount.toFixed(2)}</div>
-                      <div>
-                        <Badge variant="outline" className="bg-green-50 text-green-700 hover:bg-green-50 border-green-200">
-                          {payment.status}
-                        </Badge>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-8">
-                  <p className="text-muted-foreground">No payment history available</p>
-                </div>
-              )}
-            </CardContent>
-            <CardFooter className="flex justify-end">
-              <Button variant="outline">Download All Invoices</Button>
-            </CardFooter>
-          </Card>
+              </CardContent>
+            </Card>
+          </div>
         </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Billing History</CardTitle>
+            <CardDescription>
+              View your past invoices and payment history
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {subscription?.subscribed ? (
+              <p className="text-sm text-muted-foreground">
+                Your complete billing history is available in your PayPal account. Click the button below to access your payment history.
+              </p>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                You don't have any billing history yet. Subscribe to a plan to get started.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        {!subscription?.subscribed && (
+          <div className="bg-gradient-to-r from-primary/20 to-primary/5 p-6 rounded-lg flex items-center justify-between">
+            <div>
+              <h3 className="text-xl font-medium">Get started with a subscription plan</h3>
+              <p className="text-muted-foreground mt-1">
+                Choose a plan that fits your needs and unlock premium features.
+              </p>
+            </div>
+            <Button asChild>
+              <Link to="/pricing">
+                Browse Plans
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Link>
+            </Button>
+          </div>
+        )}
       </div>
     </DashboardLayout>
   );

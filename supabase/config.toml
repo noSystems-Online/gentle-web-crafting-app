@@ -15,3 +15,4 @@ verify_jwt = false
 
 [functions.success-handler]
 verify_jwt = true
+

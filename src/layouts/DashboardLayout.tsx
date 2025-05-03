@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { SidebarProvider, Sidebar, SidebarContent, SidebarTrigger } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/context/AuthContext';
-import { User, LogOut, CreditCard, Settings, LayoutDashboard, Users } from 'lucide-react';
+import { User, LogOut, CreditCard, Settings, LayoutDashboard, Users, FolderKanban } from 'lucide-react';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -38,6 +38,14 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
                 >
                   <LayoutDashboard className="h-4 w-4" />
                   Dashboard
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="flex items-center gap-3 justify-start px-3 py-2 mb-1"
+                  onClick={() => navigate('/projects')}
+                >
+                  <FolderKanban className="h-4 w-4" />
+                  Projects
                 </Button>
                 <Button
                   variant="ghost"
