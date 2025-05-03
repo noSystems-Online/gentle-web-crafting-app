@@ -21,6 +21,7 @@ import Pricing from "./pages/Pricing";
 import Success from "./pages/Success";
 import NotFound from "./pages/NotFound";
 import Projects from "./pages/Projects";
+import InvitationEditor from "./pages/InvitationEditor";
 
 const queryClient = new QueryClient();
 
@@ -94,6 +95,10 @@ const App = () => (
                   </ProtectedRoute>
                 } 
               />
+              
+              {/* Invitation Editor Routes */}
+              <Route path="/invitation/new" element={<InvitationEditor />} />
+              <Route path="/invitation/edit/:id" element={<InvitationEditor />} />
               
               {/* Admin routes */}
               <Route 
