@@ -1,7 +1,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Canvas as FabricCanvas, ActiveSelection, IEvent, Rect, Text } from 'fabric';
+import { fabric } from 'fabric';
 import DashboardLayout from '@/layouts/DashboardLayout';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,30 +21,33 @@ const InvitationEditor = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [fabricCanvas, setFabricCanvas] = useState<FabricCanvas | null>(null);
-  const [activeObject, setActiveObject] = useState<any>(null);
+  const [fabricCanvas, setFabricCanvas] = useState<fabric.Canvas | null>(null);
+  const [activeObject, setActiveObject] = useState<fabric.Object | null>(null);
   const [invitationTitle, setInvitationTitle] = useState("Untitled Invitation");
   const [description, setDescription] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [activeTab, setActiveTab] = useState("design");
   const { toast } = useToast();
   const { user } = useAuth();
-  const { canAccessPremiumTemplate, canAddGuest } = useFeatureAccess();
-
+  const { canAccessPremiumTemplate, getGuestLimit } = useFeatureAccess();
+  
+  // Get current guest count to determine if user can add more
+  const [guestCount, setGuestCount] = useState(0);
+  
   // Initialize canvas
   useEffect(() => {
     if (!canvasRef.current) return;
 
-    // Create a new canvas with fabric.js v6 syntax
-    const canvas = new FabricCanvas(canvasRef.current, {
+    // Create a new canvas with fabric.js
+    const canvas = new fabric.Canvas(canvasRef.current, {
       width: 600,
       height: 400,
       backgroundColor: '#ffffff',
     });
 
     // Handle selection changes
-    canvas.on('selection:created', (e: IEvent) => handleSelectionChange(e));
-    canvas.on('selection:updated', (e: IEvent) => handleSelectionChange(e));
+    canvas.on('selection:created', (e) => handleSelectionChange(e));
+    canvas.on('selection:updated', (e) => handleSelectionChange(e));
     canvas.on('selection:cleared', () => setActiveObject(null));
 
     setFabricCanvas(canvas);
@@ -59,17 +62,42 @@ const InvitationEditor = () => {
     };
   }, [id]);
 
+  // Fetch guest count when invitation ID is available
+  useEffect(() => {
+    if (id && user) {
+      fetchGuestCount();
+    }
+  }, [id, user]);
+  
+  // Fetch the current guest count
+  const fetchGuestCount = async () => {
+    if (!id) return;
+    
+    try {
+      const { data, error, count } = await supabase
+        .from('guests')
+        .select('*', { count: 'exact' })
+        .eq('invitation_id', id);
+        
+      if (error) throw error;
+      
+      setGuestCount(count || 0);
+    } catch (error) {
+      console.error('Error fetching guest count:', error);
+    }
+  };
+
   // Handle selection change
-  const handleSelectionChange = (e: IEvent) => {
+  const handleSelectionChange = (e: fabric.IEvent) => {
     const selected = e.selected?.[0];
-    setActiveObject(selected);
+    setActiveObject(selected || null);
   };
 
   // Add a text element
   const addText = () => {
     if (!fabricCanvas) return;
     
-    const text = new Text('Sample Text', {
+    const text = new fabric.Text('Sample Text', {
       left: 100,
       top: 100,
       fontFamily: 'Arial',
@@ -87,7 +115,7 @@ const InvitationEditor = () => {
     if (!fabricCanvas) return;
     
     if (type === 'rectangle') {
-      const rect = new Rect({
+      const rect = new fabric.Rect({
         left: 100,
         top: 100,
         width: 100,
@@ -242,6 +270,12 @@ const InvitationEditor = () => {
     }
   };
 
+  // Check if user can add more guests based on their subscription
+  const canAddMoreGuests = () => {
+    const guestLimit = getGuestLimit();
+    return guestCount < guestLimit;
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -311,7 +345,7 @@ const InvitationEditor = () => {
                     <TabsContent value="guests" className="mt-4">
                       <GuestList 
                         invitationId={id} 
-                        canAddMore={canAddGuest}
+                        canAddMore={canAddMoreGuests()}
                       />
                     </TabsContent>
                   </Tabs>

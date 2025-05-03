@@ -1,6 +1,5 @@
-
 import React, { useEffect, useState } from 'react';
-import { Canvas as FabricCanvas, Text } from 'fabric';
+import { fabric } from 'fabric';
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { 
@@ -28,8 +27,8 @@ import {
 } from "@/components/ui/tooltip";
 
 interface TextControlsProps {
-  activeObject: any;
-  fabricCanvas: FabricCanvas | null;
+  activeObject: fabric.Object | null;
+  fabricCanvas: fabric.Canvas | null;
 }
 
 const TextControls: React.FC<TextControlsProps> = ({ 
@@ -46,26 +45,30 @@ const TextControls: React.FC<TextControlsProps> = ({
 
   // Update controls when active object changes
   useEffect(() => {
-    if (activeObject && activeObject.type === 'text') {
-      setText(activeObject.text);
-      setFontSize(activeObject.fontSize);
-      setFontFamily(activeObject.fontFamily);
-      setTextColor(activeObject.fill);
-      setIsBold(activeObject.fontWeight === 'bold');
-      setIsItalic(activeObject.fontStyle === 'italic');
-      setIsUnderlined(activeObject.underline);
+    if (!activeObject) return;
+    
+    // Check if the object is a text object
+    if (activeObject.type === 'text' || activeObject.type === 'i-text') {
+      const textObject = activeObject as fabric.Text;
+      setText(textObject.text || '');
+      setFontSize(textObject.fontSize || 20);
+      setFontFamily(textObject.fontFamily || 'Arial');
+      setTextColor(textObject.fill?.toString() || '#000000');
+      setIsBold(textObject.fontWeight === 'bold');
+      setIsItalic(textObject.fontStyle === 'italic');
+      setIsUnderlined(!!textObject.underline);
     }
   }, [activeObject]);
 
   // Is the selected object a text object?
-  const isTextObject = activeObject && activeObject.type === 'text';
+  const isTextObject = activeObject && (activeObject.type === 'text' || activeObject.type === 'i-text');
 
   // Update text
   const handleTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newText = e.target.value;
     setText(newText);
     if (isTextObject && fabricCanvas) {
-      activeObject.set('text', newText);
+      (activeObject as fabric.Text).set('text', newText);
       fabricCanvas.renderAll();
     }
   };
@@ -75,7 +78,7 @@ const TextControls: React.FC<TextControlsProps> = ({
     const newSize = value[0];
     setFontSize(newSize);
     if (isTextObject && fabricCanvas) {
-      activeObject.set('fontSize', newSize);
+      (activeObject as fabric.Text).set('fontSize', newSize);
       fabricCanvas.renderAll();
     }
   };
@@ -84,7 +87,7 @@ const TextControls: React.FC<TextControlsProps> = ({
   const handleFontFamilyChange = (value: string) => {
     setFontFamily(value);
     if (isTextObject && fabricCanvas) {
-      activeObject.set('fontFamily', value);
+      (activeObject as fabric.Text).set('fontFamily', value);
       fabricCanvas.renderAll();
     }
   };
@@ -94,7 +97,7 @@ const TextControls: React.FC<TextControlsProps> = ({
     const newColor = e.target.value;
     setTextColor(newColor);
     if (isTextObject && fabricCanvas) {
-      activeObject.set('fill', newColor);
+      (activeObject as fabric.Text).set('fill', newColor);
       fabricCanvas.renderAll();
     }
   };
@@ -105,7 +108,7 @@ const TextControls: React.FC<TextControlsProps> = ({
     
     const newBold = !isBold;
     setIsBold(newBold);
-    activeObject.set('fontWeight', newBold ? 'bold' : 'normal');
+    (activeObject as fabric.Text).set('fontWeight', newBold ? 'bold' : 'normal');
     fabricCanvas.renderAll();
   };
 
@@ -115,7 +118,7 @@ const TextControls: React.FC<TextControlsProps> = ({
     
     const newItalic = !isItalic;
     setIsItalic(newItalic);
-    activeObject.set('fontStyle', newItalic ? 'italic' : 'normal');
+    (activeObject as fabric.Text).set('fontStyle', newItalic ? 'italic' : 'normal');
     fabricCanvas.renderAll();
   };
 
@@ -125,7 +128,7 @@ const TextControls: React.FC<TextControlsProps> = ({
     
     const newUnderline = !isUnderlined;
     setIsUnderlined(newUnderline);
-    activeObject.set('underline', newUnderline);
+    (activeObject as fabric.Text).set('underline', newUnderline);
     fabricCanvas.renderAll();
   };
 
@@ -133,7 +136,7 @@ const TextControls: React.FC<TextControlsProps> = ({
   const setTextAlign = (align: 'left' | 'center' | 'right') => {
     if (!isTextObject || !fabricCanvas) return;
     
-    activeObject.set('textAlign', align);
+    (activeObject as fabric.Text).set('textAlign', align);
     fabricCanvas.renderAll();
   };
 

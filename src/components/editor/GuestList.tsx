@@ -36,7 +36,12 @@ interface Guest {
   id: string;
   name: string;
   email: string;
-  status: string;
+  rsvp_status?: string;
+  created_at?: string;
+  sent_at?: string;
+  rsvp_message?: string;
+  rsvp_updated_at?: string;
+  invitation_id: string;
 }
 
 const GuestList: React.FC<GuestListProps> = ({ 
@@ -293,8 +298,8 @@ const GuestList: React.FC<GuestListProps> = ({
                     <TableCell>{guest.name}</TableCell>
                     <TableCell>{guest.email}</TableCell>
                     <TableCell>
-                      <Badge variant={guest.status === 'sent' ? "default" : "outline"}>
-                        {guest.status.charAt(0).toUpperCase() + guest.status.slice(1)}
+                      <Badge variant={(guest.rsvp_status === 'sent' || guest.sent_at) ? "default" : "outline"}>
+                        {guest.sent_at ? 'Sent' : (guest.rsvp_status ? guest.rsvp_status.charAt(0).toUpperCase() + guest.rsvp_status.slice(1) : 'Pending')}
                       </Badge>
                     </TableCell>
                     <TableCell>
