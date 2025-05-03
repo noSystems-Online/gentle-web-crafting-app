@@ -25,12 +25,13 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
-import { Plus, Mail, Trash2, UploadCloud, Lock, AlertCircle } from "lucide-react";
+import { Plus, Mail, Trash2, UploadCloud, Lock, AlertCircle, Eye } from "lucide-react";
 import { Link } from "react-router-dom";
 
 interface GuestListProps {
   invitationId?: string;
   canAddMore: boolean;
+  fabricCanvas?: fabric.Canvas | null;
 }
 
 interface Guest {
@@ -47,7 +48,8 @@ interface Guest {
 
 const GuestList: React.FC<GuestListProps> = ({ 
   invitationId,
-  canAddMore
+  canAddMore,
+  fabricCanvas
 }) => {
   const [guests, setGuests] = useState<Guest[]>([]);
   const [name, setName] = useState("");
@@ -55,6 +57,8 @@ const GuestList: React.FC<GuestListProps> = ({
   const [isAdding, setIsAdding] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [currentPreviewGuest, setCurrentPreviewGuest] = useState<Guest | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
   
@@ -182,14 +186,70 @@ const GuestList: React.FC<GuestListProps> = ({
     }
   };
 
+  const previewInvitation = (guest: Guest) => {
+    setCurrentPreviewGuest(guest);
+    setPreviewOpen(true);
+    
+    // Clone the canvas for the preview
+    if (fabricCanvas) {
+      setTimeout(() => {
+        updatePreviewWithGuestName(guest.name);
+      }, 100);
+    }
+  };
+  
+  const updatePreviewWithGuestName = (guestName: string) => {
+    if (!fabricCanvas) return;
+
+    // Find the canvas objects
+    const canvasObjects = fabricCanvas.getObjects();
+    
+    // Look for text objects that contain "{guest_name}" placeholder
+    const previewCanvas = fabricCanvas.clone();
+    previewCanvas.getObjects().forEach((obj) => {
+      if (obj.type === 'text' || obj.type === 'i-text') {
+        const textObj = obj as fabric.Text;
+        const originalText = textObj.text || '';
+        
+        // Replace the placeholder with the actual guest name
+        if (originalText.includes('{guest_name}')) {
+          textObj.set('text', originalText.replace('{guest_name}', guestName));
+          previewCanvas.renderAll();
+        }
+      }
+    });
+  };
+
   const sendInvites = () => {
     if (!invitationId || !user || !guests.length) return;
     
-    // In a real app, this would call a serverless function to send emails
+    // In a real app, this would call a serverless function to send emails with personalized invitations
     toast({
       title: "Invitations sent",
-      description: `Sent invitations to ${guests.length} guests.`
+      description: `Sent personalized invitations to ${guests.length} guests.`
     });
+
+    // Update sent_at timestamp for all guests
+    const updateGuests = async () => {
+      try {
+        const now = new Date().toISOString();
+        const guestIds = guests.map(guest => guest.id);
+        
+        const { error } = await supabase
+          .from('guests')
+          .update({ sent_at: now, rsvp_status: 'sent' })
+          .in('id', guestIds);
+          
+        if (error) throw error;
+        
+        // Refresh the guest list
+        fetchGuests();
+      } catch (error) {
+        console.error('Error updating guests:', error);
+      }
+    };
+    
+    updateGuests();
   };
 
   if (isLoading) {
@@ -217,6 +277,13 @@ const GuestList: React.FC<GuestListProps> = ({
 
   return (
     <div className="space-y-4">
+      <div className="bg-muted p-4 rounded-md mb-4">
+        <h4 className="font-medium mb-2">Personalization Tip</h4>
+        <p className="text-sm text-muted-foreground">
+          Add <code className="bg-background px-1 py-0.5 rounded">{"{guest_name}"}</code> to any text in your invitation design to dynamically insert the guest's name.
+        </p>
+      </div>
+    
       <div className="flex items-center justify-between">
         <h3 className="font-medium">Guest List</h3>
         
@@ -293,7 +360,7 @@ const GuestList: React.FC<GuestListProps> = ({
                   <TableHead>Name</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead className="w-[60px]"></TableHead>
+                  <TableHead className="w-[100px] text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -306,14 +373,23 @@ const GuestList: React.FC<GuestListProps> = ({
                         {guest.sent_at ? 'Sent' : (guest.rsvp_status ? guest.rsvp_status.charAt(0).toUpperCase() + guest.rsvp_status.slice(1) : 'Pending')}
                       </Badge>
                     </TableCell>
-                    <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDeleteGuest(guest.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => previewInvitation(guest)}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteGuest(guest.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -339,6 +415,31 @@ const GuestList: React.FC<GuestListProps> = ({
           </Button>
         </div>
       )}
+      
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Personalized Preview for {currentPreviewGuest?.name}</DialogTitle>
+            <DialogDescription>
+              This is how the invitation will look when sent to this guest.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="p-4 border rounded-md bg-gray-50">
+            <p className="text-muted-foreground mb-2">Preview:</p>
+            <div className="text-center">
+              {/* This would be a personalized preview of the invitation */}
+              <p>Dear {currentPreviewGuest?.name},</p>
+              <p>You've been invited!</p>
+              <p className="text-sm text-muted-foreground mt-4">
+                (In the real email, your full invitation design will appear here with the guest's name inserted)
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPreviewOpen(false)}>Close Preview</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { fabric } from 'fabric';
@@ -346,6 +345,7 @@ const InvitationEditor = () => {
                       <GuestList 
                         invitationId={id} 
                         canAddMore={canAddMoreGuests()}
+                        fabricCanvas={fabricCanvas}
                       />
                     </TabsContent>
                   </Tabs>
