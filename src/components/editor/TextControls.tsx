@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { Canvas, Text } from 'fabric';
+import { Canvas as FabricCanvas, Text } from 'fabric';
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { 
@@ -29,7 +29,7 @@ import {
 
 interface TextControlsProps {
   activeObject: any;
-  fabricCanvas: Canvas | null;
+  fabricCanvas: FabricCanvas | null;
 }
 
 const TextControls: React.FC<TextControlsProps> = ({ 

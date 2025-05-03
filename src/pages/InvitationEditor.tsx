@@ -1,7 +1,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Canvas, ActiveSelection, IEvent, Rect, Text } from 'fabric';
+import { Canvas as FabricCanvas, ActiveSelection, IEvent, Rect, Text } from 'fabric';
 import DashboardLayout from '@/layouts/DashboardLayout';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,7 +21,7 @@ const InvitationEditor = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [fabricCanvas, setFabricCanvas] = useState<Canvas | null>(null);
+  const [fabricCanvas, setFabricCanvas] = useState<FabricCanvas | null>(null);
   const [activeObject, setActiveObject] = useState<any>(null);
   const [invitationTitle, setInvitationTitle] = useState("Untitled Invitation");
   const [description, setDescription] = useState("");
@@ -35,7 +35,8 @@ const InvitationEditor = () => {
   useEffect(() => {
     if (!canvasRef.current) return;
 
-    const canvas = new Canvas(canvasRef.current, {
+    // Create a new canvas with fabric.js v6 syntax
+    const canvas = new FabricCanvas(canvasRef.current, {
       width: 600,
       height: 400,
       backgroundColor: '#ffffff',
