@@ -12,6 +12,7 @@ import {
   DialogTitle,
   DialogTrigger,
   DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { 
   Table, 
@@ -121,6 +122,7 @@ const GuestList: React.FC<GuestListProps> = ({
     setIsAdding(true);
 
     try {
+      // Remove the 'status' field that doesn't exist in the database schema
       const { error } = await supabase
         .from('guests')
         .insert({
@@ -128,7 +130,7 @@ const GuestList: React.FC<GuestListProps> = ({
           email,
           invitation_id: invitationId,
           user_id: user.id,
-          status: 'pending'
+          rsvp_status: 'pending' // Using rsvp_status instead of status
         });
         
       if (error) throw error;
@@ -233,6 +235,9 @@ const GuestList: React.FC<GuestListProps> = ({
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Add New Guest</DialogTitle>
+              <DialogDescription>
+                Enter the guest's details below to add them to your invitation.
+              </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div className="space-y-2">
