@@ -122,15 +122,14 @@ const GuestList: React.FC<GuestListProps> = ({
     setIsAdding(true);
 
     try {
-      // Remove the 'status' field that doesn't exist in the database schema
+      // Note: We're not sending the user_id field as it doesn't exist in the database schema
       const { error } = await supabase
         .from('guests')
         .insert({
           name,
           email,
           invitation_id: invitationId,
-          user_id: user.id,
-          rsvp_status: 'pending' // Using rsvp_status instead of status
+          rsvp_status: 'pending'
         });
         
       if (error) throw error;
