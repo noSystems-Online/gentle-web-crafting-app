@@ -3,6 +3,7 @@ import React, { createContext, useContext, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 // Types for our subscription plans
 export type Plan = {
@@ -61,7 +62,7 @@ const subscriptionPlans: Plan[] = [
 const SubscriptionContext = createContext<SubscriptionContextType | undefined>(undefined);
 
 export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user, supabase, checkSubscription } = useAuth();
+  const { user, checkSubscription } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -82,7 +83,6 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
     try {
       // Create checkout session with PayPal
-      // In a real app, this would call your backend API or Supabase Edge Function
       const { data, error } = await supabase.functions.invoke('create-checkout', {
         body: { planId },
       });

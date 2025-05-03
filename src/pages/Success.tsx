@@ -1,22 +1,46 @@
 
 import React, { useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Check } from "lucide-react";
 import MainLayout from "@/layouts/MainLayout";
 import { useAuth } from "@/context/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 
 const Success: React.FC = () => {
-  const { checkSubscription } = useAuth();
+  const { checkSubscription, user } = useAuth();
+  const location = useLocation();
 
   useEffect(() => {
     // Refresh subscription status when the success page loads
     const updateSubscription = async () => {
       await checkSubscription();
+      
+      // Get URL parameters for handling PayPal success
+      const params = new URLSearchParams(location.search);
+      const userId = params.get('user_id');
+      const plan = params.get('plan');
+      const subscriptionId = params.get('subscription_id');
+      
+      // If we have params, call the success handler function
+      if (userId && plan) {
+        try {
+          await supabase.functions.invoke('success-handler', {
+            body: {
+              userId,
+              plan,
+              subscriptionId
+            }
+          });
+        } catch (error) {
+          console.error('Error handling subscription success:', error);
+        }
+      }
     };
+    
     updateSubscription();
-  }, [checkSubscription]);
+  }, [checkSubscription, location.search]);
 
   return (
     <MainLayout>

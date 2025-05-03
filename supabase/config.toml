@@ -1,1 +1,17 @@
+
 project_id = "ftcjcvyyecypjvjhrqxq"
+
+[functions.create-checkout]
+verify_jwt = true
+
+[functions.cancel-subscription]
+verify_jwt = true
+
+[functions.billing-portal]
+verify_jwt = true
+
+[functions.webhook-handler]
+verify_jwt = false
+
+[functions.success-handler]
+verify_jwt = true

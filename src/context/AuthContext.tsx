@@ -79,6 +79,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .from("subscriptions")
         .select("*")
         .eq("user_id", user.id)
+        .eq("status", "active")
         .single();
 
       if (error) {
