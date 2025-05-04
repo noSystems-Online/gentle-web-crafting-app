@@ -353,10 +353,12 @@ const InvitationEditor = () => {
         setDownloadProgress(Math.round((i / guests.length) * 50));
         
         try {
-          // Create a new temporary canvas for each guest
+          // Create a temporary canvas for each guest with the EXACT same dimensions
+          const canvasWidth = fabricCanvas.getWidth();
+          const canvasHeight = fabricCanvas.getHeight();
           const tempCanvas = document.createElement('canvas');
-          tempCanvas.width = fabricCanvas.getWidth();
-          tempCanvas.height = fabricCanvas.getHeight();
+          tempCanvas.width = canvasWidth;
+          tempCanvas.height = canvasHeight;
           const tempContext = tempCanvas.getContext('2d');
           
           if (!tempContext) {
@@ -365,12 +367,15 @@ const InvitationEditor = () => {
           
           // Draw background color
           tempContext.fillStyle = fabricCanvas.backgroundColor as string;
-          tempContext.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+          tempContext.fillRect(0, 0, canvasWidth, canvasHeight);
           
-          // Clone the canvas for each guest to avoid tainting issues
-          const clonedCanvas = new fabric.Canvas();
+          // Create a new fabric canvas instance with the same dimensions
+          const clonedCanvas = new fabric.Canvas(document.createElement('canvas'), {
+            width: canvasWidth,
+            height: canvasHeight
+          });
           
-          // Load from the original JSON but with a clean state
+          // Load objects from the original canvas
           clonedCanvas.loadFromJSON(originalCanvasData, () => {
             // Replace placeholders with guest data
             const canvasObjects = clonedCanvas.getObjects();
@@ -387,24 +392,32 @@ const InvitationEditor = () => {
                   textObj.set('text', originalText.replace(/{guest_name}/g, guest.name));
                 }
               }
+              
+              // Handle QR codes with {guest_name} placeholder
+              if (obj.type === 'image' && 'qrTemplate' in obj && typeof obj.qrTemplate === 'string') {
+                // Leave the QR codes as they are for now, they'll be handled separately if needed
+              }
             });
             
             clonedCanvas.renderAll();
             
-            // Convert the clean canvas to an image
-            // We need to use a timeout to ensure the rendering is complete
+            // Use setTimeout to ensure rendering is complete
             setTimeout(() => {
-              // Draw the fabric canvas onto our temporary canvas
-              tempContext.drawImage(clonedCanvas.getElement() as HTMLCanvasElement, 0, 0);
-              
+              // Draw the cloned canvas onto our temporary canvas
               try {
+                // Get the cloned canvas element
+                const clonedElement = clonedCanvas.getElement() as HTMLCanvasElement;
+                
+                // Draw the full canvas image to the temp context
+                tempContext.drawImage(clonedElement, 0, 0, canvasWidth, canvasHeight);
+                
                 // Convert the temp canvas to data URL
                 const dataURL = tempCanvas.toDataURL('image/png');
                 
                 // Add to zip file
                 folder?.file(`${guest.name.replace(/[^a-z0-9]/gi, '_')}_invitation.png`, dataURL.split(',')[1], {base64: true});
                 
-                // Clean up the temporary canvas
+                // Clean up the temporary canvas to free memory
                 clonedCanvas.dispose();
                 
                 // Update progress
@@ -439,7 +452,7 @@ const InvitationEditor = () => {
                 console.error("Error converting canvas to data URL:", err);
                 throw err;
               }
-            }, 200);
+            }, 300); // Increased timeout to ensure rendering is complete
           });
         } catch (err) {
           console.error("Error processing guest:", guest.name, err);

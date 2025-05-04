@@ -1,3 +1,4 @@
+
 import React, { useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -94,7 +95,7 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
         const imgElement = document.createElement('img');
         imgElement.src = event.target.result as string;
         
-        // Set crossOrigin attribute to prevent canvas tainting
+        // Important: Set crossOrigin attribute to prevent canvas tainting issues
         imgElement.crossOrigin = "anonymous";
         
         imgElement.onload = () => {
@@ -122,7 +123,7 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
             top: 100,
             scaleX: 0.3,
             scaleY: 0.3,
-            crossOrigin: 'anonymous', // Add crossOrigin to prevent canvas tainting
+            crossOrigin: 'anonymous', // Important: Add crossOrigin to prevent canvas tainting
           });
           
           fabricCanvas.add(fabricImage);
