@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { fabric } from 'fabric';
 import { Button } from "@/components/ui/button";
@@ -544,6 +545,12 @@ const GuestList: React.FC<GuestListProps> = ({
     setSendingProgress(0);
     
     try {
+      console.log("Calling send-invitations function with:", {
+        invitationId,
+        invitationTitle: "Your Invitation", // In a real app, this would come from the parent component
+        userId: user.id
+      });
+      
       // Call the edge function to send invitations
       const { data, error } = await supabase.functions.invoke('send-invitations', {
         body: {
@@ -554,8 +561,11 @@ const GuestList: React.FC<GuestListProps> = ({
       });
       
       if (error) {
+        console.error("Error from edge function:", error);
         throw new Error(`Error calling send-invitations function: ${error.message}`);
       }
+      
+      console.log("Response from send-invitations:", data);
       
       // Set progress to 100% to indicate completion
       setSendingProgress(100);

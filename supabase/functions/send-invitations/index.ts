@@ -16,6 +16,12 @@ const smtpConfig = {
   crypto: (Deno.env.get("SMTP_CRYPTO") || "tls") as "tls" | "ssl" | "none"
 };
 
+// Back up relay service for testing when SMTP is not configured
+const FALLBACK_EMAIL_SERVICE = "https://api.emailjs.com/api/v1.0/email/send";
+const EMAILJS_SERVICE_ID = Deno.env.get("EMAILJS_SERVICE_ID") || "";
+const EMAILJS_TEMPLATE_ID = Deno.env.get("EMAILJS_TEMPLATE_ID") || "";
+const EMAILJS_USER_ID = Deno.env.get("EMAILJS_USER_ID") || "";
+
 interface Guest {
   id: string;
   name: string;
@@ -65,11 +71,42 @@ serve(async (req) => {
       }
     });
 
-    // Check if SMTP credentials are configured
-    if (!smtpConfig.username || !smtpConfig.password) {
+    // Fetch invitation details to verify access and get title
+    const { data: invitation, error: invitationError } = await supabase
+      .from('invitations')
+      .select('*')
+      .eq('id', invitationId)
+      .single();
+
+    if (invitationError || !invitation) {
+      console.error("Error fetching invitation:", invitationError);
       return new Response(JSON.stringify({
         success: false,
-        error: "SMTP credentials not configured"
+        error: "Invitation not found or access denied"
+      }), { 
+        status: 404, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      });
+    }
+
+    // Verify the user has access to this invitation
+    if (invitation.user_id !== userId) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: "You don't have permission to access this invitation"
+      }), { 
+        status: 403, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      });
+    }
+
+    // Check email sending capability
+    const useEmailJs = !smtpConfig.username || !smtpConfig.password;
+    if (useEmailJs && (!EMAILJS_SERVICE_ID || !EMAILJS_TEMPLATE_ID || !EMAILJS_USER_ID)) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: "No email sending method configured",
+        details: "Please set up SMTP credentials or EmailJS configuration"
       }), { 
         status: 500, 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
@@ -96,6 +133,9 @@ serve(async (req) => {
       });
     }
 
+    // Get the base URL for RSVP links
+    const publicAppUrl = Deno.env.get("PUBLIC_APP_URL") || "https://invitecanvas.app"; // Fallback to production URL
+
     // Send emails to each guest
     const results = [];
     for (const guest of guests) {
@@ -112,35 +152,97 @@ serve(async (req) => {
 
       try {
         // Generate HTML content for this guest
-        const htmlContent = generatePersonalizedHtml(guest, invitationTitle);
+        const htmlContent = generatePersonalizedHtml(guest, invitationTitle, publicAppUrl);
 
-        // Prepare email payload
-        const emailPayload = {
-          smtp: smtpConfig,
-          email: {
-            fromEmail: smtpConfig.username,
-            fromName: "Invitation Service",
-            to: [guest.email],
-            subject: `${invitationTitle} - You're Invited!`,
-            text: `Dear ${guest.name}, you've been invited! Please check your email client to view this invitation properly.`,
-            html: htmlContent
+        let emailSent = false;
+        
+        // Try to send email using preferred method
+        if (!useEmailJs) {
+          try {
+            // Prepare email payload for SMTP relay
+            const emailPayload = {
+              smtp: smtpConfig,
+              email: {
+                fromEmail: smtpConfig.username,
+                fromName: "Invitation Service",
+                to: [guest.email],
+                subject: `${invitationTitle} - You're Invited!`,
+                text: `Dear ${guest.name}, you've been invited! Please check your email client to view this invitation properly.`,
+                html: htmlContent
+              }
+            };
+
+            // Send email using relay service
+            const response = await fetch(EMAIL_RELAY_URL, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(emailPayload)
+            });
+
+            const result = await response.json();
+            if (result.success) {
+              emailSent = true;
+              results.push({
+                guestId: guest.id,
+                name: guest.name,
+                status: "success",
+                messageId: result.messageId || "sent"
+              });
+            } else {
+              throw new Error(result.message || "SMTP sending failed");
+            }
+          } catch (err) {
+            console.error("SMTP sending failed:", err);
+            // Will try EmailJS as fallback if SMTP fails
           }
-        };
-
-        // Send email using relay service
-        const response = await fetch(EMAIL_RELAY_URL, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(emailPayload)
-        });
-
-        const result = await response.json();
-
-        if (result.success) {
-          // Update guest's sent_at timestamp in database
-          const { error } = await supabase
+        }
+        
+        // Try EmailJS as fallback or primary method
+        if (!emailSent && EMAILJS_SERVICE_ID && EMAILJS_TEMPLATE_ID && EMAILJS_USER_ID) {
+          try {
+            const emailjsPayload = {
+              service_id: EMAILJS_SERVICE_ID,
+              template_id: EMAILJS_TEMPLATE_ID,
+              user_id: EMAILJS_USER_ID,
+              template_params: {
+                to_email: guest.email,
+                to_name: guest.name,
+                invitation_title: invitationTitle,
+                rsvp_link: `${publicAppUrl}/rsvp/${guest.id}`,
+                message: `Please join us! View your invitation and RSVP here: ${publicAppUrl}/rsvp/${guest.id}`
+              }
+            };
+            
+            const response = await fetch(FALLBACK_EMAIL_SERVICE, {
+              method: 'POST',
+              headers: { 
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(emailjsPayload)
+            });
+            
+            if (response.ok) {
+              emailSent = true;
+              results.push({
+                guestId: guest.id,
+                name: guest.name,
+                status: "success",
+                messageId: "emailjs-sent"
+              });
+            } else {
+              throw new Error(`EmailJS failed with status ${response.status}`);
+            }
+          } catch (err) {
+            console.error("EmailJS sending failed:", err);
+            throw new Error(`Failed to send invitation via EmailJS: ${err.message}`);
+          }
+        }
+        
+        // If email was sent successfully, update guest status
+        if (emailSent) {
+          const { error: updateError } = await supabase
             .from('guests')
             .update({ 
               sent_at: new Date().toISOString(), 
@@ -148,18 +250,12 @@ serve(async (req) => {
             })
             .eq('id', guest.id);
             
-          if (error) {
-            throw new Error(`Error updating guest status: ${error.message}`);
+          if (updateError) {
+            console.error(`Error updating guest status: ${updateError.message}`);
+            // We don't throw here since the email was sent
           }
-          
-          results.push({
-            guestId: guest.id,
-            name: guest.name,
-            status: "success",
-            messageId: result.messageId
-          });
         } else {
-          throw new Error(result.message || "Unknown email sending error");
+          throw new Error("All email sending methods failed");
         }
       } catch (error) {
         console.error(`Error sending invitation to ${guest.name}:`, error);
@@ -203,9 +299,7 @@ serve(async (req) => {
 });
 
 // Function to generate HTML for a personalized invitation
-function generatePersonalizedHtml(guest: Guest, invitationTitle: string): string {
-  const host = Deno.env.get("PUBLIC_APP_URL") || "https://app.example.com";
-  
+function generatePersonalizedHtml(guest: Guest, invitationTitle: string, baseUrl: string): string {
   return `
   <!DOCTYPE html>
   <html>
@@ -227,7 +321,7 @@ function generatePersonalizedHtml(guest: Guest, invitationTitle: string): string
       <p>Dear ${guest.name},</p>
       <p>You've been invited! Please click the button below to view your personal invitation and RSVP.</p>
       <p style="text-align: center;">
-        <a href="${host}/rsvp/${guest.id}" class="button">View Invitation & RSVP</a>
+        <a href="${baseUrl}/rsvp/${guest.id}" class="button">View Invitation & RSVP</a>
       </p>
     </div>
     <div class="footer">
