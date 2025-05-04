@@ -60,11 +60,10 @@ export function useFeatureAccess() {
   };
 
   // Check if user can insert QR codes in their invitations
+  // Modified: Now all authenticated users can use QR codes
   const canUseQrCodes = () => {
-    if (!user) return false;
-    
-    const { hasAccess } = checkAccess('qrCodes');
-    return hasAccess;
+    // Allow all authenticated users to use QR codes
+    return !!user;
   };
 
   // Get the maximum number of guests allowed per invitation
