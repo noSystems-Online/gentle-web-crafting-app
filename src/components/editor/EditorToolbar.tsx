@@ -1,4 +1,3 @@
-
 import React, { useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -76,6 +75,7 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
         const imgElement = new Image();
         imgElement.src = event.target.result as string;
         imgElement.onload = () => {
+          // Fixed: Use fabric.Image.fromElement() with proper parameters
           const fabricImage = new fabric.Image(imgElement, {
             left: 100,
             top: 100,
