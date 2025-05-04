@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { fabric } from 'fabric';
@@ -405,11 +406,14 @@ const InvitationEditor = () => {
                   if (qrTemplate && qrTemplate.includes('{guest_name}')) {
                     // Create a promise to update the QR code
                     const qrPromise = new Promise<void>((resolveQr) => {
-                      // Replace the placeholder with the actual guest name
+                      // Replace the placeholder with the actual guest name - IMPORTANT: Use the actual guest name, not "Preview"
                       const personalized = qrTemplate.replace(/{guest_name}/g, guest.name);
                       
                       // Generate a new QR code URL with the personalized data
                       const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(personalized)}&size=200x200`;
+                      
+                      // Log for debugging
+                      console.log(`Generating QR for guest ${guest.name} with data: ${personalized}`);
                       
                       // Update the QR code image
                       fabric.Image.fromURL(qrApiUrl, (newQrImage) => {
@@ -428,6 +432,7 @@ const InvitationEditor = () => {
                         const index = clonedCanvas.getObjects().indexOf(qrObj);
                         clonedCanvas.remove(qrObj);
                         clonedCanvas.insertAt(newQrImage, index);
+                        clonedCanvas.renderAll();
                         resolveQr();
                       }, { crossOrigin: 'anonymous' }); // Set crossOrigin for image loading
                     });
@@ -445,11 +450,13 @@ const InvitationEditor = () => {
             });
           });
           
-          // Use setTimeout to ensure rendering is complete
+          // Increase timeout to ensure rendering is complete
           await new Promise<void>((resolve) => {
             setTimeout(() => {
-              // Draw the cloned canvas onto our temporary canvas
               try {
+                // Ensure the canvas is fully rendered before capturing
+                clonedCanvas.renderAll();
+                
                 // Get the cloned canvas element
                 const clonedElement = clonedCanvas.getElement() as HTMLCanvasElement;
                 
@@ -470,7 +477,7 @@ const InvitationEditor = () => {
                 console.error("Error converting canvas to data URL:", err);
                 resolve(); // Resolve anyway to continue with other guests
               }
-            }, 500); // Increased timeout to ensure rendering is complete
+            }, 800); // Increased timeout to ensure rendering is complete
           });
           
           // Update progress

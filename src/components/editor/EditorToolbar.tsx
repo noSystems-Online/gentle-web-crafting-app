@@ -167,16 +167,16 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
     }
     
     try {
-      // Store the template value for later use
+      // Store the template value for later use - this is the original template with placeholders
       const templateValue = qrValue;
       
       // For preview purposes, we'll use a temporary value
-      // If the value contains placeholders, use a sample value for preview
       let previewValue = templateValue;
       
       // For preview purposes, replace placeholder with "Preview" to show something meaningful
       if (templateValue.includes("{guest_name}")) {
         previewValue = templateValue.replace("{guest_name}", "Preview");
+        console.log("Created QR with template:", templateValue, "Preview value:", previewValue);
       }
       
       // Generate QR code using a public API with the preview value
@@ -184,13 +184,14 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
       
       // Create image from QR code URL with crossOrigin attribute
       fabric.Image.fromURL(qrApiUrl, (qrImage) => {
-        // Store the original template value as a custom property
+        // IMPORTANT: Store the original template as a custom property
+        // The downloaded versions will use this template and replace {guest_name} with actual guest names
         qrImage.set({
           left: 100,
           top: 100,
           scaleX: 0.5,
           scaleY: 0.5,
-          qrTemplate: templateValue, // Store the original template with placeholders
+          qrTemplate: templateValue, // CRITICAL: Store the original template with placeholders
           crossOrigin: 'anonymous', // Add crossOrigin to prevent canvas tainting
         });
         
