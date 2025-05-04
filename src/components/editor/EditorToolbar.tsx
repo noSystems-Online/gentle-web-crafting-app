@@ -251,24 +251,25 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
           </TooltipContent>
         </Tooltip>
 
-        {/* Fix: Separate Dialog from Tooltip to ensure both work properly */}
+        {/* Completely restructured QR Code button and dialog */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="h-8 w-8 p-0"
+              disabled={!canUseQrCodes()}
+              onClick={() => canUseQrCodes() && setIsQrDialogOpen(true)}
+            >
+              <QrCode className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>{canUseQrCodes() ? 'Add QR Code' : 'QR Code (Pro feature)'}</p>
+          </TooltipContent>
+        </Tooltip>
+        
         <Dialog open={isQrDialogOpen} onOpenChange={setIsQrDialogOpen}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="h-8 w-8 p-0"
-                disabled={!canUseQrCodes()}
-                onClick={() => canUseQrCodes() && setIsQrDialogOpen(true)}
-              >
-                <QrCode className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>{canUseQrCodes() ? 'Add QR Code' : 'QR Code (Pro feature)'}</p>
-            </TooltipContent>
-          </Tooltip>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Create QR Code</DialogTitle>
