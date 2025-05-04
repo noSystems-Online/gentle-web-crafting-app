@@ -526,14 +526,6 @@ const GuestList: React.FC<GuestListProps> = ({
     return html;
   };
 
-  // Function to handle changes to SMTP credentials
-  const handleSmtpInputChange = (field: keyof EmailCredentials, value: any) => {
-    setSmtpCredentials(prev => ({
-      ...prev,
-      [field]: value
-    }));
-  };
-  
   // Send invitations using the edge function
   const sendInvites = async () => {
     // Check if we have guests and a valid invitation
