@@ -1,4 +1,3 @@
-
 import React, { useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -271,9 +270,11 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
     });
   };
 
+  // Fixes the ref forwarding issue by making sure components are properly nested
   return (
     <div className="flex items-center gap-2 p-2 border rounded-md bg-background">
       <TooltipProvider>
+        {/* Text button */}
         <Tooltip>
           <TooltipTrigger asChild>
             <Button 
@@ -290,6 +291,7 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
           </TooltipContent>
         </Tooltip>
 
+        {/* Rectangle button */}
         <Tooltip>
           <TooltipTrigger asChild>
             <Button 
@@ -306,6 +308,7 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
           </TooltipContent>
         </Tooltip>
 
+        {/* Circle button */}
         <Tooltip>
           <TooltipTrigger asChild>
             <Button 
@@ -322,17 +325,16 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
           </TooltipContent>
         </Tooltip>
 
+        {/* Image button */}
         <Tooltip>
           <TooltipTrigger asChild>
-            <div>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="h-8 w-8 p-0"
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <Image className="h-4 w-4" />
-              </Button>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="h-8 w-8 p-0"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Image className="h-4 w-4" />
               <Input 
                 ref={fileInputRef}
                 type="file" 
@@ -340,14 +342,14 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
                 className="hidden" 
                 onChange={handleImageUpload}
               />
-            </div>
+            </Button>
           </TooltipTrigger>
           <TooltipContent>
             <p>Add Image</p>
           </TooltipContent>
         </Tooltip>
 
-        {/* QR Code button with separate tooltip and dialog */}
+        {/* QR Code button */}
         <Tooltip>
           <TooltipTrigger asChild>
             <Button 
@@ -365,7 +367,7 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
           </TooltipContent>
         </Tooltip>
         
-        {/* Add crop button */}
+        {/* Crop button */}
         {onCropCanvas && (
           <Tooltip>
             <TooltipTrigger asChild>
@@ -386,50 +388,53 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
         
         <div className="border-r h-6 mx-2" />
         
-        {/* Layer arrangement dropdown menu */}
+        {/* Layer arrangement - fixed by separating tooltip from dropdown */}
         <Tooltip>
           <TooltipTrigger asChild>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button 
-                  variant="ghost" 
-                  size="sm"
-                  disabled={!hasSelection}
-                  className="h-8 px-2 flex items-center gap-1"
-                >
-                  <BringToFront className="h-4 w-4" />
-                  <span className="text-xs">Arrange</span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start">
-                <DropdownMenuLabel>Layer Order</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuGroup>
-                  <DropdownMenuItem onClick={handleBringToFront} disabled={!hasSelection}>
-                    <BringToFront className="h-4 w-4 mr-2" />
-                    Bring to Front
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={handleSendToBack} disabled={!hasSelection}>
-                    <SendToBack className="h-4 w-4 mr-2" />
-                    Send to Back
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={handleBringForward} disabled={!hasSelection}>
-                    <MoveUp className="h-4 w-4 mr-2" />
-                    Bring Forward
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={handleSendBackward} disabled={!hasSelection}>
-                    <MoveDown className="h-4 w-4 mr-2" />
-                    Send Backward
-                  </DropdownMenuItem>
-                </DropdownMenuGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <span>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    disabled={!hasSelection}
+                    className="h-8 px-2 flex items-center gap-1"
+                  >
+                    <BringToFront className="h-4 w-4" />
+                    <span className="text-xs">Arrange</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  <DropdownMenuLabel>Layer Order</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuGroup>
+                    <DropdownMenuItem onClick={handleBringToFront} disabled={!hasSelection}>
+                      <BringToFront className="h-4 w-4 mr-2" />
+                      Bring to Front
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleSendToBack} disabled={!hasSelection}>
+                      <SendToBack className="h-4 w-4 mr-2" />
+                      Send to Back
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleBringForward} disabled={!hasSelection}>
+                      <MoveUp className="h-4 w-4 mr-2" />
+                      Bring Forward
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleSendBackward} disabled={!hasSelection}>
+                      <MoveDown className="h-4 w-4 mr-2" />
+                      Send Backward
+                    </DropdownMenuItem>
+                  </DropdownMenuGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </span>
           </TooltipTrigger>
           <TooltipContent>
             <p>Arrange Layers</p>
           </TooltipContent>
         </Tooltip>
 
+        {/* Delete button */}
         <Tooltip>
           <TooltipTrigger asChild>
             <Button 
