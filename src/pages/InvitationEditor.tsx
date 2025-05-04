@@ -363,6 +363,7 @@ const InvitationEditor = () => {
                   onAddShape={addShape}
                   onDelete={deleteObject}
                   hasSelection={!!activeObject}
+                  fabricCanvas={fabricCanvas}
                 />
                 
                 <div className="border rounded-md overflow-hidden mt-4">
