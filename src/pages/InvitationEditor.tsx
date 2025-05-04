@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { fabric } from 'fabric';
@@ -15,7 +14,23 @@ import EditorToolbar from '@/components/editor/EditorToolbar';
 import TextControls from '@/components/editor/TextControls';
 import TemplateSelector from '@/components/editor/TemplateSelector';
 import GuestList from '@/components/editor/GuestList';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, Download } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Progress } from "@/components/ui/progress";
+
+interface Guest {
+  id: string;
+  name: string;
+  email: string;
+  rsvp_status?: string;
+}
 
 const InvitationEditor = () => {
   const { id } = useParams();
@@ -33,6 +48,13 @@ const InvitationEditor = () => {
   
   // Get current guest count to determine if user can add more
   const [guestCount, setGuestCount] = useState(0);
+  const [guests, setGuests] = useState<Guest[]>([]);
+  
+  // Download progress state
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState(0);
+  const [showDownloadProgress, setShowDownloadProgress] = useState(false);
+  const [downloadComplete, setDownloadComplete] = useState(false);
   
   // Initialize canvas
   useEffect(() => {
@@ -67,6 +89,7 @@ const InvitationEditor = () => {
   useEffect(() => {
     if (id && user) {
       fetchGuestCount();
+      fetchGuests();
     }
   }, [id, user]);
   
@@ -85,6 +108,24 @@ const InvitationEditor = () => {
       setGuestCount(count || 0);
     } catch (error) {
       console.error('Error fetching guest count:', error);
+    }
+  };
+
+  // Fetch the guests data
+  const fetchGuests = async () => {
+    if (!id) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('guests')
+        .select('*')
+        .eq('invitation_id', id);
+        
+      if (error) throw error;
+      
+      setGuests(data || []);
+    } catch (error) {
+      console.error('Error fetching guests:', error);
     }
   };
 
@@ -277,6 +318,160 @@ const InvitationEditor = () => {
     return guestCount < guestLimit;
   };
 
+  // Generate and download personalized invitations for all guests
+  const downloadPersonalizedInvitations = async () => {
+    if (!fabricCanvas || !guests.length) {
+      toast({
+        title: "No guests found",
+        description: "Add guests to generate personalized invitations.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsDownloading(true);
+    setDownloadProgress(0);
+    setShowDownloadProgress(true);
+    setDownloadComplete(false);
+
+    try {
+      // Create a zip file with JSZip
+      const JSZip = await import('jszip').then(module => module.default);
+      const zip = new JSZip();
+      
+      // Save original canvas state
+      const originalCanvasData = fabricCanvas.toJSON();
+      
+      // Create folder for the invitations
+      const folder = zip.folder(`${invitationTitle.replace(/[^a-z0-9]/gi, '_')}_invitations`);
+      
+      // Generate one image per guest
+      for (let i = 0; i < guests.length; i++) {
+        const guest = guests[i];
+        
+        // Restore canvas to original state
+        fabricCanvas.loadFromJSON(originalCanvasData, () => {
+          // Update progress
+          setDownloadProgress(Math.round((i / guests.length) * 50));
+          
+          // Replace placeholders with guest data
+          replaceGuestPlaceholders(guest.name);
+          
+          // Convert canvas to image and add to zip
+          setTimeout(() => {
+            const dataURL = fabricCanvas.toDataURL({
+              format: 'png',
+              quality: 1
+            });
+            
+            // Convert data URL to binary
+            const binaryData = atob(dataURL.split(',')[1]);
+            const array = [];
+            for (let j = 0; j < binaryData.length; j++) {
+              array.push(binaryData.charCodeAt(j));
+            }
+            
+            // Add to zip file
+            folder?.file(`${guest.name.replace(/[^a-z0-9]/gi, '_')}_invitation.png`, new Uint8Array(array), { base64: false });
+            
+            // Update progress
+            setDownloadProgress(Math.round((i + 1) / guests.length * 100));
+            
+            // If it's the last guest, generate and download the zip file
+            if (i === guests.length - 1) {
+              zip.generateAsync({ type: 'blob' }).then((content) => {
+                // Create download link
+                const downloadLink = document.createElement('a');
+                downloadLink.href = URL.createObjectURL(content);
+                downloadLink.download = `${invitationTitle.replace(/[^a-z0-9]/gi, '_')}_invitations.zip`;
+                document.body.appendChild(downloadLink);
+                downloadLink.click();
+                document.body.removeChild(downloadLink);
+                
+                // Restore original canvas
+                fabricCanvas.loadFromJSON(originalCanvasData, () => {
+                  fabricCanvas.renderAll();
+                  
+                  // Complete download process
+                  setDownloadComplete(true);
+                  
+                  setTimeout(() => {
+                    setIsDownloading(false);
+                    setShowDownloadProgress(false);
+                  }, 2000);
+                });
+              });
+            }
+          }, 100);
+        });
+      }
+    } catch (error) {
+      console.error('Error generating personalized invitations:', error);
+      toast({
+        title: "Error generating invitations",
+        description: "There was a problem creating the personalized invitations.",
+        variant: "destructive"
+      });
+      setIsDownloading(false);
+      setShowDownloadProgress(false);
+    }
+  };
+  
+  // Function to replace placeholders with guest data
+  const replaceGuestPlaceholders = (guestName: string) => {
+    if (!fabricCanvas) return;
+    
+    const canvasObjects = fabricCanvas.getObjects();
+    
+    // Process each object on canvas
+    canvasObjects.forEach((obj) => {
+      // Handle text objects with {guest_name} placeholder
+      if ((obj.type === 'text' || obj.type === 'i-text') && obj instanceof fabric.Text) {
+        const textObj = obj;
+        const originalText = textObj.text || '';
+        
+        // Replace the placeholder with the actual guest name
+        if (originalText.includes('{guest_name}')) {
+          textObj.set('text', originalText.replace(/{guest_name}/g, guestName));
+        }
+      }
+      
+      // Handle QR codes with {guest_name} placeholder in their template
+      if (obj.type === 'image' && 'qrTemplate' in obj && typeof obj.qrTemplate === 'string') {
+        const qrObj = obj as fabric.Image & { qrTemplate: string };
+        const qrTemplate = qrObj.qrTemplate;
+        
+        // If the QR code has a template with the placeholder
+        if (qrTemplate && qrTemplate.includes('{guest_name}')) {
+          const personalized = qrTemplate.replace(/{guest_name}/g, guestName);
+          
+          // Generate a new QR code URL with the personalized data
+          const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(personalized)}&size=200x200`;
+          
+          // Update the QR code image
+          fabric.Image.fromURL(qrApiUrl, (newQrImage) => {
+            // Keep the position, scale, etc. of the original QR code
+            newQrImage.set({
+              left: qrObj.left,
+              top: qrObj.top,
+              scaleX: qrObj.scaleX,
+              scaleY: qrObj.scaleY,
+              angle: qrObj.angle,
+              qrTemplate: qrTemplate // Keep the original template
+            });
+            
+            // Replace the old QR code with the new one
+            fabricCanvas.remove(qrObj);
+            fabricCanvas.add(newQrImage);
+            fabricCanvas.renderAll();
+          });
+        }
+      }
+    });
+    
+    fabricCanvas.renderAll();
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -351,6 +546,24 @@ const InvitationEditor = () => {
                       />
                     </TabsContent>
                   </Tabs>
+
+                  {/* Download button for personalized invitations */}
+                  {guests.length > 0 && (
+                    <div className="pt-4">
+                      <Button 
+                        variant="outline" 
+                        className="w-full" 
+                        onClick={downloadPersonalizedInvitations}
+                        disabled={isDownloading || !guests.length}
+                      >
+                        <Download className="mr-2 h-4 w-4" />
+                        Download All Personalized Invitations
+                      </Button>
+                      <p className="text-xs text-muted-foreground mt-2">
+                        Creates a .zip file with personalized invitations for each guest.
+                      </p>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -366,6 +579,7 @@ const InvitationEditor = () => {
                   onDelete={deleteObject}
                   hasSelection={!!activeObject}
                   fabricCanvas={fabricCanvas}
+                  onDownloadAll={downloadPersonalizedInvitations}
                 />
                 
                 <div className="border rounded-md overflow-hidden mt-4">
@@ -387,6 +601,43 @@ const InvitationEditor = () => {
           </div>
         </div>
       </div>
+
+      {/* Download progress dialog */}
+      <Dialog open={showDownloadProgress} onOpenChange={(open) => {
+        if (!isDownloading) setShowDownloadProgress(open);
+      }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {downloadComplete ? "Download Complete" : "Generating Personalized Invitations"}
+            </DialogTitle>
+            <DialogDescription>
+              {downloadComplete 
+                ? "All personalized invitations have been downloaded as a ZIP file." 
+                : "Please wait while we generate personalized invitations for each guest."}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="py-6">
+            <Progress value={downloadProgress} className="w-full" />
+            <p className="text-center text-sm text-muted-foreground mt-2">
+              {downloadComplete 
+                ? "100% Complete" 
+                : `${downloadProgress}% Complete - Processing ${guests.length} invitation${guests.length !== 1 ? 's' : ''}`}
+            </p>
+          </div>
+          
+          <DialogFooter>
+            <Button 
+              disabled={!downloadComplete} 
+              onClick={() => setShowDownloadProgress(false)}
+              className="w-full"
+            >
+              {downloadComplete ? "Close" : "Processing..."}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 };

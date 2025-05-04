@@ -1,4 +1,3 @@
-
 import React, { useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +12,8 @@ import {
   MoveUp,
   MoveDown,
   SendToBack,
-  BringToFront
+  BringToFront,
+  Download
 } from "lucide-react";
 import { 
   Tooltip,
@@ -50,6 +50,7 @@ interface EditorToolbarProps {
   onDelete: () => void;
   hasSelection: boolean;
   fabricCanvas: fabric.Canvas | null;
+  onDownloadAll?: () => void;
 }
 
 const EditorToolbar: React.FC<EditorToolbarProps> = ({
@@ -57,7 +58,8 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
   onAddShape,
   onDelete,
   hasSelection,
-  fabricCanvas
+  fabricCanvas,
+  onDownloadAll
 }) => {
   const { canUseQrCodes } = useFeatureAccess();
   const { toast } = useToast();
@@ -412,6 +414,25 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
             <p>Delete</p>
           </TooltipContent>
         </Tooltip>
+
+        {/* Download button */}
+        {onDownloadAll && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={onDownloadAll}
+                className="h-8 w-8 p-0 ml-auto"
+              >
+                <Download className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Download Personalized Invitations</p>
+            </TooltipContent>
+          </Tooltip>
+        )}
       </TooltipProvider>
       
       <Dialog open={isQrDialogOpen} onOpenChange={setIsQrDialogOpen}>
