@@ -33,3 +33,18 @@ enabled = false
 # Configure the send-invitations function
 [functions.send-invitations]
 verify_jwt = true
+
+# Environment variables for SMTP email sending
+[functions.send-invitations.env]
+SMTP_HOST = "placeholder"
+SMTP_PORT = "587"
+SMTP_USERNAME = "placeholder"
+SMTP_PASSWORD = "placeholder"
+SMTP_CRYPTO = "tls"
+PUBLIC_APP_URL = "placeholder"
+
+# Environment variables for EmailJS fallback (optional)
+EMAILJS_SERVICE_ID = "placeholder"
+EMAILJS_TEMPLATE_ID = "placeholder"
+EMAILJS_USER_ID = "placeholder"
+
