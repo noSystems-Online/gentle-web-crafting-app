@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { fabric } from 'fabric';
 import { Button } from "@/components/ui/button";
@@ -206,16 +205,49 @@ const GuestList: React.FC<GuestListProps> = ({
     const canvasObjects = fabricCanvas.getObjects();
     
     // Look for text objects that contain "{guest_name}" placeholder
-    const previewCanvas = fabricCanvas.clone();
-    previewCanvas.getObjects().forEach((obj) => {
-      if (obj.type === 'text' || obj.type === 'i-text') {
-        const textObj = obj as fabric.Text;
+    canvasObjects.forEach((obj) => {
+      // Handle text objects with {guest_name} placeholder
+      if ((obj.type === 'text' || obj.type === 'i-text') && obj instanceof fabric.Text) {
+        const textObj = obj;
         const originalText = textObj.text || '';
         
         // Replace the placeholder with the actual guest name
         if (originalText.includes('{guest_name}')) {
-          textObj.set('text', originalText.replace('{guest_name}', guestName));
-          previewCanvas.renderAll();
+          textObj.set('text', originalText.replace(/{guest_name}/g, guestName));
+          fabricCanvas.renderAll();
+        }
+      }
+      
+      // Handle QR codes with {guest_name} placeholder in their template
+      if (obj.type === 'image' && 'qrTemplate' in obj && typeof obj.qrTemplate === 'string') {
+        const qrObj = obj as fabric.Image & { qrTemplate: string };
+        const qrTemplate = qrObj.qrTemplate;
+        
+        // If the QR code has a template with the placeholder
+        if (qrTemplate && qrTemplate.includes('{guest_name}')) {
+          const personalized = qrTemplate.replace(/{guest_name}/g, guestName);
+          
+          // Generate a new QR code URL with the personalized data
+          const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(personalized)}&size=200x200`;
+          
+          // Update the QR code image
+          fabric.Image.fromURL(qrApiUrl, (newQrImage) => {
+            // Keep the position, scale, etc. of the original QR code
+            newQrImage.set({
+              left: qrObj.left,
+              top: qrObj.top,
+              scaleX: qrObj.scaleX,
+              scaleY: qrObj.scaleY,
+              angle: qrObj.angle,
+              qrTemplate: qrTemplate // Keep the original template
+            });
+            
+            // Replace the old QR code with the new one
+            const index = fabricCanvas.getObjects().indexOf(qrObj);
+            fabricCanvas.remove(qrObj);
+            fabricCanvas.insertAt(newQrImage, index);
+            fabricCanvas.renderAll();
+          });
         }
       }
     });

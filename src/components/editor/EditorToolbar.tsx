@@ -1,4 +1,3 @@
-
 import React, { useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +22,8 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import { useFeatureAccess } from '@/hooks/use-feature-access';
 import { useToast } from "@/hooks/use-toast";
@@ -135,23 +136,34 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
     if (!fabricCanvas || !qrValue.trim()) {
       toast({
         title: "Missing information",
-        description: "Please enter a URL for the QR code.",
+        description: "Please enter a URL or text for the QR code.",
         variant: "destructive",
       });
       return;
     }
     
     try {
+      // The value might contain a placeholder like {guest_name}
+      // We'll use a temporary value for the preview, but keep the original value for generation
+      let previewValue = qrValue;
+      
+      // For preview purposes, replace placeholder with "Guest" to show something meaningful
+      if (qrValue.includes("{guest_name}")) {
+        previewValue = qrValue.replace("{guest_name}", "Guest");
+      }
+      
       // Generate QR code using a public API
-      const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(qrValue)}&size=200x200`;
+      const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(previewValue)}&size=200x200`;
       
       // Create image from QR code URL
       fabric.Image.fromURL(qrApiUrl, (qrImage) => {
+        // Store the original template value as a custom property
         qrImage.set({
           left: 100,
           top: 100,
           scaleX: 0.5,
-          scaleY: 0.5
+          scaleY: 0.5,
+          qrTemplate: qrValue, // Store the original template with placeholders
         });
         
         fabricCanvas.add(qrImage);
@@ -160,7 +172,9 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
         
         toast({
           title: "QR Code added",
-          description: "Your QR code has been added to the canvas.",
+          description: qrValue.includes("{guest_name}") 
+            ? "Dynamic QR code added. It will be personalized for each guest."
+            : "Your QR code has been added to the canvas.",
         });
         
         setIsQrDialogOpen(false);
@@ -251,7 +265,7 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
           </TooltipContent>
         </Tooltip>
 
-        {/* Completely restructured QR Code button and dialog */}
+        {/* QR Code button with separate tooltip and dialog */}
         <Tooltip>
           <TooltipTrigger asChild>
             <Button 
@@ -273,6 +287,9 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Create QR Code</DialogTitle>
+              <DialogDescription>
+                Enter a URL, text, or use dynamic placeholders like {'{guest_name}'} that will be replaced with each guest's information.
+              </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div>
@@ -281,14 +298,25 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
                 </label>
                 <Input
                   id="qrValue"
-                  placeholder="https://example.com or your text here"
+                  placeholder="https://example.com or {guest_name}"
                   value={qrValue}
                   onChange={(e) => setQrValue(e.target.value)}
                 />
+                <p className="text-xs text-muted-foreground mt-2">
+                  Tip: You can use {'{guest_name}'} placeholder which will be replaced with the guest's name.
+                </p>
+              </div>
+              <div className="bg-muted rounded-md p-3">
+                <h4 className="text-sm font-medium mb-1">Examples:</h4>
+                <ul className="text-xs space-y-1 text-muted-foreground">
+                  <li>• Personal greeting: <span className="font-mono">Hello {'{guest_name}'}!</span></li>
+                  <li>• Custom URL: <span className="font-mono">https://rsvp.com?guest={'{guest_name}'}</span></li>
+                </ul>
               </div>
               <Button 
                 onClick={addQrCode}
                 disabled={!qrValue.trim()}
+                className="w-full"
               >
                 Create QR Code
               </Button>
