@@ -377,71 +377,76 @@ const InvitationEditor = () => {
           });
           
           // Load objects from the original canvas
-          clonedCanvas.loadFromJSON(originalCanvasData, async () => {
-            // Replace placeholders with guest data
-            const canvasObjects = clonedCanvas.getObjects();
-            const qrCodePromises: Promise<void>[] = [];
-            
-            // Process each object on canvas
-            for (const obj of canvasObjects) {
-              // Handle text objects with {guest_name} placeholder
-              if ((obj.type === 'text' || obj.type === 'i-text') && obj instanceof fabric.Text) {
-                const textObj = obj;
-                const originalText = textObj.text || '';
+          await new Promise<void>((resolve) => {
+            clonedCanvas.loadFromJSON(originalCanvasData, async () => {
+              // Replace placeholders with guest data
+              const canvasObjects = clonedCanvas.getObjects();
+              const qrCodePromises: Promise<void>[] = [];
+              
+              // Process each object on canvas
+              for (const obj of canvasObjects) {
+                // Handle text objects with {guest_name} placeholder
+                if ((obj.type === 'text' || obj.type === 'i-text') && obj instanceof fabric.Text) {
+                  const textObj = obj;
+                  const originalText = textObj.text || '';
+                  
+                  // Replace the placeholder with the actual guest name
+                  if (originalText.includes('{guest_name}')) {
+                    textObj.set('text', originalText.replace(/{guest_name}/g, guest.name));
+                  }
+                }
                 
-                // Replace the placeholder with the actual guest name
-                if (originalText.includes('{guest_name}')) {
-                  textObj.set('text', originalText.replace(/{guest_name}/g, guest.name));
+                // Handle QR codes with {guest_name} placeholder in their template
+                if (obj.type === 'image' && 'qrTemplate' in obj && typeof obj.qrTemplate === 'string') {
+                  const qrObj = obj as fabric.Image & { qrTemplate: string };
+                  const qrTemplate = qrObj.qrTemplate;
+                  
+                  // If the QR code has a template with the placeholder
+                  if (qrTemplate && qrTemplate.includes('{guest_name}')) {
+                    // Create a promise to update the QR code
+                    const qrPromise = new Promise<void>((resolveQr) => {
+                      // Replace the placeholder with the actual guest name
+                      const personalized = qrTemplate.replace(/{guest_name}/g, guest.name);
+                      
+                      // Generate a new QR code URL with the personalized data
+                      const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(personalized)}&size=200x200`;
+                      
+                      // Update the QR code image
+                      fabric.Image.fromURL(qrApiUrl, (newQrImage) => {
+                        // Keep the position, scale, etc. of the original QR code
+                        newQrImage.set({
+                          left: qrObj.left,
+                          top: qrObj.top,
+                          scaleX: qrObj.scaleX,
+                          scaleY: qrObj.scaleY,
+                          angle: qrObj.angle,
+                          qrTemplate: qrTemplate, // Keep the original template
+                          crossOrigin: 'anonymous' // Add cross-origin attribute
+                        });
+                        
+                        // Replace the old QR code with the new one
+                        const index = clonedCanvas.getObjects().indexOf(qrObj);
+                        clonedCanvas.remove(qrObj);
+                        clonedCanvas.insertAt(newQrImage, index);
+                        resolveQr();
+                      }, { crossOrigin: 'anonymous' }); // Set crossOrigin for image loading
+                    });
+                    
+                    qrCodePromises.push(qrPromise);
+                  }
                 }
               }
               
-              // Handle QR codes with {guest_name} placeholder in their template
-              if (obj.type === 'image' && 'qrTemplate' in obj && typeof obj.qrTemplate === 'string') {
-                const qrObj = obj as fabric.Image & { qrTemplate: string };
-                const qrTemplate = qrObj.qrTemplate;
-                
-                // If the QR code has a template with the placeholder
-                if (qrTemplate && qrTemplate.includes('{guest_name}')) {
-                  // Create a promise to update the QR code
-                  const qrPromise = new Promise<void>((resolve) => {
-                    // Replace the placeholder with the actual guest name
-                    const personalized = qrTemplate.replace(/{guest_name}/g, guest.name);
-                    
-                    // Generate a new QR code URL with the personalized data
-                    const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(personalized)}&size=200x200`;
-                    
-                    // Update the QR code image
-                    fabric.Image.fromURL(qrApiUrl, (newQrImage) => {
-                      // Keep the position, scale, etc. of the original QR code
-                      newQrImage.set({
-                        left: qrObj.left,
-                        top: qrObj.top,
-                        scaleX: qrObj.scaleX,
-                        scaleY: qrObj.scaleY,
-                        angle: qrObj.angle,
-                        qrTemplate: qrTemplate, // Keep the original template
-                        crossOrigin: 'anonymous' // Add cross-origin attribute
-                      });
-                      
-                      // Replace the old QR code with the new one
-                      const index = clonedCanvas.getObjects().indexOf(qrObj);
-                      clonedCanvas.remove(qrObj);
-                      clonedCanvas.insertAt(newQrImage, index);
-                      resolve();
-                    }, { crossOrigin: 'anonymous' }); // Set crossOrigin for image loading
-                  });
-                  
-                  qrCodePromises.push(qrPromise);
-                }
-              }
-            }
-            
-            // Wait for all QR codes to be updated
-            await Promise.all(qrCodePromises);
-            
-            clonedCanvas.renderAll();
-            
-            // Use setTimeout to ensure rendering is complete
+              // Wait for all QR codes to be updated
+              await Promise.all(qrCodePromises);
+              
+              clonedCanvas.renderAll();
+              resolve();
+            });
+          });
+          
+          // Use setTimeout to ensure rendering is complete
+          await new Promise<void>((resolve) => {
             setTimeout(() => {
               // Draw the cloned canvas onto our temporary canvas
               try {
@@ -454,51 +459,56 @@ const InvitationEditor = () => {
                 // Convert the temp canvas to data URL
                 const dataURL = tempCanvas.toDataURL('image/png');
                 
-                // Add to zip file - FIXED: Quote issue in the file name
+                // Add to zip file
                 folder?.file(`${guest.name.replace(/[^a-z0-9]/gi, '_')}_invitation.png`, dataURL.split(',')[1], {base64: true});
                 
                 // Clean up the temporary canvas to free memory
                 clonedCanvas.dispose();
                 
-                // Update progress
-                setDownloadProgress(Math.round((i + 1) / guests.length * 100));
-                
-                // If it's the last guest, generate and download the zip file
-                if (i === guests.length - 1) {
-                  zip.generateAsync({ type: 'blob' }).then((content) => {
-                    // Create download link
-                    const downloadLink = document.createElement('a');
-                    downloadLink.href = URL.createObjectURL(content);
-                    downloadLink.download = `${invitationTitle.replace(/[^a-z0-9]/gi, '_')}_invitations.zip`;
-                    document.body.appendChild(downloadLink);
-                    downloadLink.click();
-                    document.body.removeChild(downloadLink);
-                    
-                    // Restore original canvas
-                    fabricCanvas.loadFromJSON(originalCanvasData, () => {
-                      fabricCanvas.renderAll();
-                      
-                      // Complete download process
-                      setDownloadComplete(true);
-                      
-                      setTimeout(() => {
-                        setIsDownloading(false);
-                        setShowDownloadProgress(false);
-                      }, 2000);
-                    });
-                  });
-                }
+                resolve();
               } catch (err) {
                 console.error("Error converting canvas to data URL:", err);
-                throw err;
+                resolve(); // Resolve anyway to continue with other guests
               }
             }, 500); // Increased timeout to ensure rendering is complete
           });
+          
+          // Update progress
+          setDownloadProgress(Math.round((i + 1) / guests.length * 100));
         } catch (err) {
           console.error("Error processing guest:", guest.name, err);
           // Continue with next guest if one fails
           continue;
         }
+      }
+      
+      // Generate and download the zip file
+      try {
+        const content = await zip.generateAsync({ type: 'blob' });
+        
+        // Create download link
+        const downloadLink = document.createElement('a');
+        downloadLink.href = URL.createObjectURL(content);
+        downloadLink.download = `${invitationTitle.replace(/[^a-z0-9]/gi, '_')}_invitations.zip`;
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+        document.body.removeChild(downloadLink);
+        
+        // Restore original canvas
+        fabricCanvas.loadFromJSON(originalCanvasData, () => {
+          fabricCanvas.renderAll();
+          
+          // Complete download process
+          setDownloadComplete(true);
+          
+          setTimeout(() => {
+            setIsDownloading(false);
+            setShowDownloadProgress(false);
+          }, 2000);
+        });
+      } catch (err) {
+        console.error("Error generating zip file:", err);
+        throw err;
       }
     } catch (error) {
       console.error('Error generating personalized invitations:', error);
