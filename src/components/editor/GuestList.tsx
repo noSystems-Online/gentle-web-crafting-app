@@ -134,6 +134,7 @@ const GuestList: React.FC<GuestListProps> = ({
         const displayWidth = Math.floor(originalWidth * scaleFactor);
         const displayHeight = Math.floor(originalHeight * scaleFactor);
         
+        // Use cssOnly to avoid changing the internal canvas dimensions
         previewCanvas.setDimensions({
           width: displayWidth,
           height: displayHeight
@@ -349,74 +350,90 @@ const GuestList: React.FC<GuestListProps> = ({
 
   // Function to update preview canvas for a specific guest
   const updatePreviewForGuest = async (guest: Guest, canvas: fabric.Canvas) => {
-    // Load the original canvas data first
-    if (fabricCanvas) {
-      canvas.loadFromJSON(fabricCanvas.toJSON(), async () => {
-        // Find the canvas objects
-        const canvasObjects = canvas.getObjects();
-        const qrCodePromises: Promise<void>[] = [];
-        
-        // Look for text objects that contain "{guest_name}" placeholder
-        for (const obj of canvasObjects) {
-          // Handle text objects with {guest_name} placeholder
-          if ((obj.type === 'text' || obj.type === 'i-text') && obj instanceof fabric.Text) {
-            const textObj = obj;
-            const originalText = textObj.text || '';
-            
-            // Replace the placeholder with the actual guest name
-            if (originalText.includes('{guest_name}')) {
-              textObj.set('text', originalText.replace(/{guest_name}/g, guest.name));
-              canvas.renderAll();
-            }
-          }
+    if (!canvas) return;
+    
+    // Log for debugging
+    console.log(`Updating preview for guest: ${guest.name}`);
+    
+    try {
+      // Find the canvas objects
+      const canvasObjects = canvas.getObjects();
+      const qrCodePromises: Promise<void>[] = [];
+      
+      // Look for text objects that contain "{guest_name}" placeholder
+      for (const obj of canvasObjects) {
+        // Handle text objects with {guest_name} placeholder
+        if ((obj.type === 'text' || obj.type === 'i-text') && obj instanceof fabric.Text) {
+          const textObj = obj;
+          const originalText = textObj.text || '';
           
-          // Handle QR codes with {guest_name} placeholder in their template
-          if (obj.type === 'image' && 'qrTemplate' in obj && typeof obj.qrTemplate === 'string') {
-            const qrObj = obj as fabric.Image & { qrTemplate: string };
-            const qrTemplate = qrObj.qrTemplate;
-            
-            // If the QR code has a template with the placeholder
-            if (qrTemplate && qrTemplate.includes('{guest_name}')) {
-              // Create a promise to update the QR code
-              const qrPromise = new Promise<void>((resolve) => {
-                // Replace the placeholder with the actual guest name
-                const personalized = qrTemplate.replace(/{guest_name}/g, guest.name);
-                
-                // Generate a new QR code URL with the personalized data
-                const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(personalized)}&size=200x200`;
-                
-                // Update the QR code image
-                fabric.Image.fromURL(qrApiUrl, (newQrImage) => {
-                  // Keep the position, scale, etc. of the original QR code
-                  newQrImage.set({
-                    left: qrObj.left,
-                    top: qrObj.top,
-                    scaleX: qrObj.scaleX,
-                    scaleY: qrObj.scaleY,
-                    angle: qrObj.angle,
-                    qrTemplate: qrTemplate, // Keep the original template
-                    crossOrigin: 'anonymous' // Add cross-origin attribute
-                  });
-                  
-                  // Replace the old QR code with the new one
-                  const index = canvas.getObjects().indexOf(qrObj);
-                  canvas.remove(qrObj);
-                  canvas.insertAt(newQrImage, index);
-                  canvas.renderAll();
-                  resolve();
-                }, { crossOrigin: 'anonymous' }); // Set crossOrigin for image loading
-              });
-              
-              qrCodePromises.push(qrPromise);
-            }
+          // Replace the placeholder with the actual guest name
+          if (originalText.includes('{guest_name}')) {
+            textObj.set('text', originalText.replace(/{guest_name}/g, guest.name));
+            canvas.renderAll();
           }
         }
         
-        // Wait for all QR codes to be updated
-        await Promise.all(qrCodePromises);
-        
-        canvas.renderAll();
-      });
+        // Handle QR codes with {guest_name} placeholder in their template
+        if (obj.type === 'image' && 'qrTemplate' in obj && typeof obj.qrTemplate === 'string') {
+          const qrObj = obj as fabric.Image & { qrTemplate: string };
+          const qrTemplate = qrObj.qrTemplate;
+          
+          // If the QR code has a template with the placeholder
+          if (qrTemplate && qrTemplate.includes('{guest_name}')) {
+            // Create a promise to update the QR code
+            const qrPromise = new Promise<void>((resolve) => {
+              // Replace the placeholder with the actual guest name
+              const personalized = qrTemplate.replace(/{guest_name}/g, guest.name);
+              
+              // Log QR code generation for debugging
+              console.log(`Generating QR for guest: ${guest.name}, with value: ${personalized}`);
+              
+              // Generate a new QR code URL with the personalized data
+              const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(personalized)}&size=200x200`;
+              
+              // Update the QR code image
+              fabric.Image.fromURL(qrApiUrl, (newQrImage) => {
+                if (!newQrImage) {
+                  console.error("Failed to load QR image");
+                  resolve();
+                  return;
+                }
+                
+                // Keep the position, scale, etc. of the original QR code
+                newQrImage.set({
+                  left: qrObj.left,
+                  top: qrObj.top,
+                  scaleX: qrObj.scaleX,
+                  scaleY: qrObj.scaleY,
+                  angle: qrObj.angle,
+                  qrTemplate: qrTemplate, // Keep the original template
+                  crossOrigin: 'anonymous' // Add cross-origin attribute
+                });
+                
+                // Replace the old QR code with the new one
+                const index = canvas.getObjects().indexOf(qrObj);
+                if (index !== -1) {
+                  canvas.remove(qrObj);
+                  canvas.insertAt(newQrImage, index);
+                  canvas.renderAll();
+                }
+                resolve();
+              }, { crossOrigin: 'anonymous' }); // Set crossOrigin for image loading
+            });
+            
+            qrCodePromises.push(qrPromise);
+          }
+        }
+      }
+      
+      // Wait for all QR codes to be updated
+      await Promise.all(qrCodePromises);
+      
+      // Final render
+      canvas.renderAll();
+    } catch (error) {
+      console.error("Error updating preview for guest:", error);
     }
   };
 
