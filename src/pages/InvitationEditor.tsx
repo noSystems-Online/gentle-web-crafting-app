@@ -415,8 +415,8 @@ const InvitationEditor = () => {
                 // Convert the temp canvas to data URL
                 const dataURL = tempCanvas.toDataURL('image/png');
                 
-                // Add to zip file
-                folder?.file(`${guest.name.replace(/[^a-z0-9]/gi, '_')}_invitation.png', dataURL.split(',')[1], {base64: true});
+                // Add to zip file - FIXED: Quote issue in the file name
+                folder?.file(`${guest.name.replace(/[^a-z0-9]/gi, '_')}_invitation.png`, dataURL.split(',')[1], {base64: true});
                 
                 // Clean up the temporary canvas to free memory
                 clonedCanvas.dispose();
