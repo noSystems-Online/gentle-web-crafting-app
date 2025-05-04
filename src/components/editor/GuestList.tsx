@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { fabric } from 'fabric';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -69,7 +69,7 @@ const GuestList: React.FC<GuestListProps> = ({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [currentPreviewGuest, setCurrentPreviewGuest] = useState<Guest | null>(null);
-  // New states for the preview carousel
+  // States for the preview carousel
   const [previewCarouselOpen, setPreviewCarouselOpen] = useState(false);
   const [currentGuestIndex, setCurrentGuestIndex] = useState(0);
   const [previewCanvasRef, setPreviewCanvasRef] = useState<HTMLCanvasElement | null>(null);
@@ -91,6 +91,8 @@ const GuestList: React.FC<GuestListProps> = ({
   // Create preview canvas when the carousel sheet is opened
   useEffect(() => {
     if (previewCarouselOpen && previewCanvasRef && fabricCanvas) {
+      console.log("Creating preview canvas for carousel");
+      
       // Create a new fabric canvas for the preview
       const canvas = new fabric.Canvas(previewCanvasRef, {
         width: fabricCanvas.getWidth(),
@@ -102,12 +104,15 @@ const GuestList: React.FC<GuestListProps> = ({
       
       // Load the original canvas content
       canvas.loadFromJSON(fabricCanvas.toJSON(), () => {
+        console.log("Canvas JSON loaded into preview canvas");
         if (guests.length > 0) {
           updatePreviewForGuest(guests[currentGuestIndex], canvas);
         }
+        canvas.renderAll();
       });
       
       return () => {
+        console.log("Disposing preview canvas");
         canvas.dispose();
         setPreviewCanvas(null);
       };
@@ -117,9 +122,10 @@ const GuestList: React.FC<GuestListProps> = ({
   // Update preview when navigating between guests
   useEffect(() => {
     if (previewCanvas && guests.length > 0) {
+      console.log(`Updating preview for guest index ${currentGuestIndex}: ${guests[currentGuestIndex]?.name}`);
       updatePreviewForGuest(guests[currentGuestIndex], previewCanvas);
     }
-  }, [currentGuestIndex, guests]);
+  }, [currentGuestIndex, guests, previewCanvas]);
 
   // Adjust canvas size when window resizes
   useEffect(() => {
@@ -209,7 +215,6 @@ const GuestList: React.FC<GuestListProps> = ({
     setIsAdding(true);
 
     try {
-      // Note: We're not sending the user_id field as it doesn't exist in the database schema
       const { error } = await supabase
         .from('guests')
         .insert({
@@ -313,11 +318,20 @@ const GuestList: React.FC<GuestListProps> = ({
             // Replace the placeholder with the actual guest name
             const personalized = qrTemplate.replace(/{guest_name}/g, guestName);
             
+            // Log QR code generation for debugging
+            console.log(`Generating QR for guest: ${guest.name}, with value: ${personalized}`);
+            
             // Generate a new QR code URL with the personalized data
             const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(personalized)}&size=200x200`;
             
             // Update the QR code image
             fabric.Image.fromURL(qrApiUrl, (newQrImage) => {
+              if (!newQrImage) {
+                console.error("Failed to load QR image");
+                resolve();
+                return;
+              }
+              
               // Keep the position, scale, etc. of the original QR code
               newQrImage.set({
                 left: qrObj.left,
@@ -331,8 +345,11 @@ const GuestList: React.FC<GuestListProps> = ({
               
               // Replace the old QR code with the new one
               const index = fabricCanvas.getObjects().indexOf(qrObj);
-              fabricCanvas.remove(qrObj);
-              fabricCanvas.insertAt(newQrImage, index);
+              if (index !== -1) {
+                fabricCanvas.remove(qrObj);
+                fabricCanvas.insertAt(newQrImage, index);
+                fabricCanvas.renderAll();
+              }
               resolve();
             }, { crossOrigin: 'anonymous' }); // Set crossOrigin for image loading
           });
@@ -348,11 +365,13 @@ const GuestList: React.FC<GuestListProps> = ({
     fabricCanvas.renderAll();
   };
 
-  // Function to update preview canvas for a specific guest
-  const updatePreviewForGuest = async (guest: Guest, canvas: fabric.Canvas) => {
-    if (!canvas) return;
+  // Improved function to update preview canvas for a specific guest
+  const updatePreviewForGuest = useCallback(async (guest: Guest, canvas: fabric.Canvas) => {
+    if (!canvas || !canvas.getElement()) {
+      console.error("Invalid canvas for preview");
+      return;
+    }
     
-    // Log for debugging
     console.log(`Updating preview for guest: ${guest.name}`);
     
     try {
@@ -360,7 +379,7 @@ const GuestList: React.FC<GuestListProps> = ({
       const canvasObjects = canvas.getObjects();
       const qrCodePromises: Promise<void>[] = [];
       
-      // Look for text objects that contain "{guest_name}" placeholder
+      // First handle text objects to avoid race conditions
       for (const obj of canvasObjects) {
         // Handle text objects with {guest_name} placeholder
         if ((obj.type === 'text' || obj.type === 'i-text') && obj instanceof fabric.Text) {
@@ -369,11 +388,15 @@ const GuestList: React.FC<GuestListProps> = ({
           
           // Replace the placeholder with the actual guest name
           if (originalText.includes('{guest_name}')) {
+            console.log(`Replacing text placeholder for ${guest.name}`);
             textObj.set('text', originalText.replace(/{guest_name}/g, guest.name));
             canvas.renderAll();
           }
         }
-        
+      }
+      
+      // Then handle QR codes separately
+      for (const obj of canvasObjects) {
         // Handle QR codes with {guest_name} placeholder in their template
         if (obj.type === 'image' && 'qrTemplate' in obj && typeof obj.qrTemplate === 'string') {
           const qrObj = obj as fabric.Image & { qrTemplate: string };
@@ -400,23 +423,27 @@ const GuestList: React.FC<GuestListProps> = ({
                   return;
                 }
                 
-                // Keep the position, scale, etc. of the original QR code
-                newQrImage.set({
-                  left: qrObj.left,
-                  top: qrObj.top,
-                  scaleX: qrObj.scaleX,
-                  scaleY: qrObj.scaleY,
-                  angle: qrObj.angle,
-                  qrTemplate: qrTemplate, // Keep the original template
-                  crossOrigin: 'anonymous' // Add cross-origin attribute
-                });
-                
-                // Replace the old QR code with the new one
-                const index = canvas.getObjects().indexOf(qrObj);
-                if (index !== -1) {
-                  canvas.remove(qrObj);
-                  canvas.insertAt(newQrImage, index);
-                  canvas.renderAll();
+                try {
+                  // Keep the position, scale, etc. of the original QR code
+                  newQrImage.set({
+                    left: qrObj.left,
+                    top: qrObj.top,
+                    scaleX: qrObj.scaleX,
+                    scaleY: qrObj.scaleY,
+                    angle: qrObj.angle,
+                    qrTemplate: qrTemplate, // Keep the original template
+                    crossOrigin: 'anonymous' // Add cross-origin attribute
+                  });
+                  
+                  // Replace the old QR code with the new one
+                  const index = canvas.getObjects().indexOf(qrObj);
+                  if (index !== -1) {
+                    canvas.remove(qrObj);
+                    canvas.insertAt(newQrImage, index);
+                    canvas.renderAll();
+                  }
+                } catch (err) {
+                  console.error("Error replacing QR code:", err);
                 }
                 resolve();
               }, { crossOrigin: 'anonymous' }); // Set crossOrigin for image loading
@@ -428,14 +455,15 @@ const GuestList: React.FC<GuestListProps> = ({
       }
       
       // Wait for all QR codes to be updated
-      await Promise.all(qrCodePromises);
-      
-      // Final render
-      canvas.renderAll();
+      if (qrCodePromises.length > 0) {
+        await Promise.all(qrCodePromises);
+        // Final render after all promises resolve
+        setTimeout(() => canvas.renderAll(), 100);
+      }
     } catch (error) {
       console.error("Error updating preview for guest:", error);
     }
-  };
+  }, []);
 
   // Functions to navigate between guests in the preview
   const nextGuest = () => {
@@ -615,6 +643,7 @@ const GuestList: React.FC<GuestListProps> = ({
                           variant="ghost"
                           size="sm"
                           onClick={() => openPreviewCarousel(index)}
+                          title="Preview"
                         >
                           <Eye className="h-4 w-4" />
                         </Button>
@@ -622,6 +651,7 @@ const GuestList: React.FC<GuestListProps> = ({
                           variant="ghost"
                           size="sm"
                           onClick={() => handleDeleteGuest(guest.id)}
+                          title="Delete"
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -640,18 +670,18 @@ const GuestList: React.FC<GuestListProps> = ({
       )}
       
       {guests.length > 0 && (
-        <div className="flex items-center gap-2 mt-4">
-          <Button variant="outline" className="flex-1">
+        <div className="flex flex-col sm:flex-row items-center gap-2 mt-4">
+          <Button variant="outline" className="w-full sm:flex-1">
             <UploadCloud className="mr-2 h-4 w-4" />
             Import CSV
           </Button>
-          <Button className="flex-1" onClick={sendInvites}>
+          <Button className="w-full sm:flex-1" onClick={sendInvites}>
             <Mail className="mr-2 h-4 w-4" />
             Send Invites
           </Button>
           <Button 
             variant="secondary" 
-            className="flex-1 bg-blue-100 hover:bg-blue-200 text-blue-700 border border-blue-300"
+            className="w-full sm:flex-1 bg-blue-100 hover:bg-blue-200 text-blue-700 border border-blue-300"
             onClick={() => openPreviewCarousel()}
           >
             <Eye className="mr-2 h-4 w-4" />
@@ -718,7 +748,7 @@ const GuestList: React.FC<GuestListProps> = ({
         </SheetContent>
       </Sheet>
       
-      {/* Original preview dialog (keeping for reference but can be removed) */}
+      {/* Original preview dialog (keeping for reference) */}
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
         <DialogContent className="max-w-4xl">
           <DialogHeader>
