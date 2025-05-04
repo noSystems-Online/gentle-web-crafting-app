@@ -73,10 +73,30 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
       reader.onload = (event) => {
         if (!event.target || !fabricCanvas) return;
         
-        // Fix: Use the correct HTMLImageElement constructor
+        // Create an HTML image element
         const imgElement = document.createElement('img');
         imgElement.src = event.target.result as string;
+        
         imgElement.onload = () => {
+          // Calculate appropriate dimensions for the canvas
+          const maxCanvasWidth = 800; // Maximum width for the canvas
+          const maxCanvasHeight = 600; // Maximum height for the canvas
+          
+          let newCanvasWidth = Math.max(fabricCanvas.width || 600, imgElement.width);
+          let newCanvasHeight = Math.max(fabricCanvas.height || 400, imgElement.height);
+          
+          // Cap dimensions at maximum values
+          newCanvasWidth = Math.min(newCanvasWidth, maxCanvasWidth);
+          newCanvasHeight = Math.min(newCanvasHeight, maxCanvasHeight);
+          
+          // Resize canvas if needed
+          if (newCanvasWidth > fabricCanvas.width || newCanvasHeight > fabricCanvas.height) {
+            fabricCanvas.setDimensions({
+              width: newCanvasWidth,
+              height: newCanvasHeight
+            });
+          }
+          
           const fabricImage = new fabric.Image(imgElement, {
             left: 100,
             top: 100,
@@ -231,19 +251,19 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
           </TooltipContent>
         </Tooltip>
 
+        {/* Fix: Separate Dialog from Tooltip to ensure both work properly */}
         <Dialog open={isQrDialogOpen} onOpenChange={setIsQrDialogOpen}>
           <Tooltip>
             <TooltipTrigger asChild>
-              <DialogTrigger asChild>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  className="h-8 w-8 p-0"
-                  disabled={!canUseQrCodes()}
-                >
-                  <QrCode className="h-4 w-4" />
-                </Button>
-              </DialogTrigger>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="h-8 w-8 p-0"
+                disabled={!canUseQrCodes()}
+                onClick={() => canUseQrCodes() && setIsQrDialogOpen(true)}
+              >
+                <QrCode className="h-4 w-4" />
+              </Button>
             </TooltipTrigger>
             <TooltipContent>
               <p>{canUseQrCodes() ? 'Add QR Code' : 'QR Code (Pro feature)'}</p>
