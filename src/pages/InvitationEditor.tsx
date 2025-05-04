@@ -14,6 +14,7 @@ import EditorToolbar from '@/components/editor/EditorToolbar';
 import TextControls from '@/components/editor/TextControls';
 import TemplateSelector from '@/components/editor/TemplateSelector';
 import GuestList from '@/components/editor/GuestList';
+import CropTool from '@/components/editor/CropTool';
 import { AlertCircle, Download } from 'lucide-react';
 import {
   Dialog,
@@ -528,6 +529,26 @@ const InvitationEditor = () => {
     fabricCanvas.renderAll();
   };
 
+  // Add state for crop tool
+  const [isCropping, setIsCropping] = useState(false);
+
+  // Handle crop canvas action
+  const handleCropCanvas = () => {
+    setIsCropping(true);
+  };
+  
+  // Handle crop complete
+  const handleCropComplete = () => {
+    setIsCropping(false);
+    // Save the current state after cropping
+    saveInvitation();
+  };
+  
+  // Handle crop cancel
+  const handleCropCancel = () => {
+    setIsCropping(false);
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -636,6 +657,7 @@ const InvitationEditor = () => {
                   hasSelection={!!activeObject}
                   fabricCanvas={fabricCanvas}
                   onDownloadAll={downloadPersonalizedInvitations}
+                  onCropCanvas={handleCropCanvas}
                 />
                 
                 <div className="border rounded-md overflow-hidden mt-4">
@@ -649,6 +671,15 @@ const InvitationEditor = () => {
                           <span>Login to save your work</span>
                         </div>
                       </div>
+                    )}
+                    
+                    {/* Show crop tool overlay when cropping */}
+                    {isCropping && fabricCanvas && (
+                      <CropTool 
+                        fabricCanvas={fabricCanvas} 
+                        onCropComplete={handleCropComplete}
+                        onCancel={handleCropCancel}
+                      />
                     )}
                   </div>
                 </div>

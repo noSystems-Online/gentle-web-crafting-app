@@ -1,0 +1,216 @@
+
+import React, { useState, useEffect } from 'react';
+import { fabric } from 'fabric';
+import { Button } from "@/components/ui/button";
+import { Crop, X } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { useToast } from '@/hooks/use-toast';
+
+interface CropToolProps {
+  fabricCanvas: fabric.Canvas | null;
+  onCropComplete: () => void;
+  onCancel: () => void;
+}
+
+const CropTool: React.FC<CropToolProps> = ({ 
+  fabricCanvas, 
+  onCropComplete,
+  onCancel
+}) => {
+  const [cropRect, setCropRect] = useState<fabric.Rect | null>(null);
+  const [originalObjects, setOriginalObjects] = useState<fabric.Object[]>([]);
+  const [originalDimensions, setOriginalDimensions] = useState({ width: 0, height: 0 });
+  const [isDialogOpen, setIsDialogOpen] = useState(true);
+  const { toast } = useToast();
+
+  // Initialize crop tool
+  useEffect(() => {
+    if (!fabricCanvas) return;
+
+    // Store original canvas dimensions and objects
+    const canvasWidth = fabricCanvas.getWidth();
+    const canvasHeight = fabricCanvas.getHeight();
+    setOriginalDimensions({ width: canvasWidth, height: canvasHeight });
+    
+    // Clone all objects to restore them if needed
+    setOriginalObjects(fabricCanvas.getObjects().map(obj => obj.clone()));
+    
+    // Create the crop rectangle
+    const rect = new fabric.Rect({
+      left: canvasWidth * 0.1,
+      top: canvasHeight * 0.1,
+      width: canvasWidth * 0.8,
+      height: canvasHeight * 0.8,
+      fill: 'rgba(0,0,0,0.1)',
+      stroke: '#2563eb',
+      strokeWidth: 2,
+      strokeDashArray: [5, 5],
+      transparentCorners: false,
+      cornerColor: '#2563eb',
+      cornerSize: 10,
+      lockRotation: true,
+      hasRotatingPoint: false,
+    });
+    
+    fabricCanvas.add(rect);
+    fabricCanvas.setActiveObject(rect);
+    setCropRect(rect);
+    
+    // Disable selection of other objects during cropping
+    fabricCanvas.getObjects().forEach(obj => {
+      if (obj !== rect) {
+        obj.selectable = false;
+        obj.evented = false;
+      }
+    });
+    
+    fabricCanvas.renderAll();
+    
+    toast({
+      title: "Crop Tool Activated",
+      description: "Adjust the blue rectangle to define the crop area, then click Apply.",
+    });
+    
+    // Clean up on unmount
+    return () => {
+      if (fabricCanvas && cropRect && fabricCanvas.contains(cropRect)) {
+        fabricCanvas.remove(cropRect);
+        
+        // Re-enable selection of other objects
+        fabricCanvas.getObjects().forEach(obj => {
+          obj.selectable = true;
+          obj.evented = true;
+        });
+        
+        fabricCanvas.renderAll();
+      }
+    };
+  }, [fabricCanvas]);
+
+  // Handle dialog close
+  const handleDialogClose = () => {
+    setIsDialogOpen(false);
+    onCancel();
+  };
+
+  // Apply the crop
+  const applyCrop = () => {
+    if (!fabricCanvas || !cropRect) return;
+    
+    try {
+      // Get crop rectangle position and dimensions
+      const cropLeft = cropRect.left || 0;
+      const cropTop = cropRect.top || 0;
+      const cropWidth = cropRect.width || 0;
+      const cropHeight = cropRect.height || 0;
+      const scaleX = cropRect.scaleX || 1;
+      const scaleY = cropRect.scaleY || 1;
+      
+      // Calculate actual crop dimensions considering scale
+      const actualCropWidth = cropWidth * scaleX;
+      const actualCropHeight = cropHeight * scaleY;
+      
+      // Remove the crop rectangle
+      fabricCanvas.remove(cropRect);
+      
+      // Adjust all objects' positions relative to the crop rectangle
+      fabricCanvas.getObjects().forEach(obj => {
+        obj.left = (obj.left || 0) - cropLeft;
+        obj.top = (obj.top || 0) - cropTop;
+        obj.setCoords();
+      });
+      
+      // Update canvas dimensions
+      fabricCanvas.setDimensions({
+        width: actualCropWidth,
+        height: actualCropHeight
+      });
+      
+      // Update the canvas viewport
+      fabricCanvas.setViewportTransform([1, 0, 0, 1, -cropLeft, -cropTop]);
+      fabricCanvas.renderAll();
+      
+      // Reset the viewport to account for the new dimensions
+      fabricCanvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
+      
+      // Re-enable selection of objects
+      fabricCanvas.getObjects().forEach(obj => {
+        obj.selectable = true;
+        obj.evented = true;
+      });
+      
+      toast({
+        title: "Canvas Cropped",
+        description: "The canvas has been cropped to your selection."
+      });
+      
+      setIsDialogOpen(false);
+      onCropComplete();
+    } catch (error) {
+      console.error("Error cropping canvas:", error);
+      toast({
+        title: "Crop Failed",
+        description: "There was an error cropping the canvas.",
+        variant: "destructive"
+      });
+      
+      // Restore original state
+      cancelCrop();
+    }
+  };
+
+  // Cancel the crop operation
+  const cancelCrop = () => {
+    if (!fabricCanvas || !cropRect) return;
+    
+    // Remove the crop rectangle
+    fabricCanvas.remove(cropRect);
+    
+    // Re-enable selection of objects
+    fabricCanvas.getObjects().forEach(obj => {
+      obj.selectable = true;
+      obj.evented = true;
+    });
+    
+    fabricCanvas.renderAll();
+    setIsDialogOpen(false);
+    onCancel();
+  };
+
+  return (
+    <Dialog open={isDialogOpen} onOpenChange={(open) => {
+      if (!open) cancelCrop();
+      setIsDialogOpen(open);
+    }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Crop Canvas</DialogTitle>
+          <DialogDescription>
+            Adjust the blue rectangle to define the area you want to keep. 
+            Everything outside this area will be removed.
+          </DialogDescription>
+        </DialogHeader>
+        
+        <DialogFooter className="flex flex-col sm:flex-row gap-2 sm:justify-between mt-4">
+          <Button variant="outline" onClick={cancelCrop} className="sm:flex-1">
+            <X className="mr-1 h-4 w-4" />
+            Cancel
+          </Button>
+          <Button onClick={applyCrop} className="sm:flex-1">
+            <Crop className="mr-1 h-4 w-4" />
+            Apply Crop
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+export default CropTool;

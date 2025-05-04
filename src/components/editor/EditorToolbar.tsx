@@ -1,4 +1,3 @@
-
 import React, { useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,7 +13,8 @@ import {
   MoveDown,
   SendToBack,
   BringToFront,
-  Download
+  Download,
+  Crop
 } from "lucide-react";
 import { 
   Tooltip,
@@ -52,6 +52,7 @@ interface EditorToolbarProps {
   hasSelection: boolean;
   fabricCanvas: fabric.Canvas | null;
   onDownloadAll?: () => void;
+  onCropCanvas?: () => void;
 }
 
 const EditorToolbar: React.FC<EditorToolbarProps> = ({
@@ -60,7 +61,8 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
   onDelete,
   hasSelection,
   fabricCanvas,
-  onDownloadAll
+  onDownloadAll,
+  onCropCanvas
 }) => {
   const { canUseQrCodes } = useFeatureAccess();
   const { toast } = useToast();
@@ -357,6 +359,25 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
             <p>{canUseQrCodes() ? 'Add QR Code' : 'QR Code (Pro feature)'}</p>
           </TooltipContent>
         </Tooltip>
+        
+        {/* Add crop button */}
+        {onCropCanvas && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0"
+                onClick={onCropCanvas}
+              >
+                <Crop className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Crop Canvas</p>
+            </TooltipContent>
+          </Tooltip>
+        )}
         
         <div className="border-r h-6 mx-2" />
         
