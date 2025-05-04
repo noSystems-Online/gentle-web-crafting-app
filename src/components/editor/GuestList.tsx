@@ -35,7 +35,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
-import { Plus, Mail, Trash2, UploadCloud, Lock, AlertCircle, Eye, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Mail, Trash2, UploadCloud, Lock, AlertCircle, Eye, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
 
 interface GuestListProps {
@@ -54,6 +54,14 @@ interface Guest {
   rsvp_message?: string;
   rsvp_updated_at?: string;
   invitation_id: string;
+}
+
+interface EmailCredentials {
+  host: string;
+  port: number;
+  username: string;
+  password: string;
+  crypto: "ssl" | "tls" | "none";
 }
 
 const GuestList: React.FC<GuestListProps> = ({ 
@@ -75,6 +83,19 @@ const GuestList: React.FC<GuestListProps> = ({
   const [previewCanvasRef, setPreviewCanvasRef] = useState<HTMLCanvasElement | null>(null);
   const [previewCanvas, setPreviewCanvas] = useState<fabric.Canvas | null>(null);
   const previewCanvasContainerRef = React.useRef<HTMLDivElement>(null);
+  
+  // Email sending states
+  const [smtpDialogOpen, setSmtpDialogOpen] = useState(false);
+  const [smtpCredentials, setSmtpCredentials] = useState<EmailCredentials>({
+    host: "",
+    port: 587,
+    username: "",
+    password: "",
+    crypto: "tls"
+  });
+  const [isSendingEmails, setIsSendingEmails] = useState(false);
+  const [sendingProgress, setSendingProgress] = useState(0);
+  const [showSendingProgress, setShowSendingProgress] = useState(false);
 
   const { toast } = useToast();
   const { user } = useAuth();
@@ -319,7 +340,7 @@ const GuestList: React.FC<GuestListProps> = ({
             const personalized = qrTemplate.replace(/{guest_name}/g, guestName);
             
             // Log QR code generation for debugging
-            console.log(`Generating QR for guest: ${guest.name}, with value: ${personalized}`);
+            console.log(`Generating QR for guest: ${guestName}, with value: ${personalized}`);
             
             // Generate a new QR code URL with the personalized data
             const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(personalized)}&size=200x200`;
@@ -484,36 +505,178 @@ const GuestList: React.FC<GuestListProps> = ({
     setPreviewCarouselOpen(true);
   };
 
-  const sendInvites = () => {
-    if (!invitationId || !user || !guests.length) return;
+  // Function to generate HTML for a personalized invitation
+  const generatePersonalizedHtml = (guest: Guest, invitationTitle: string) => {
+    // Generate a basic HTML template for the invitation
+    const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>${invitationTitle}</title>
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+        h1 { color: #4a5568; text-align: center; }
+        .invitation { border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin: 20px 0; background-color: #f7fafc; }
+        .footer { font-size: 12px; text-align: center; margin-top: 20px; color: #718096; }
+        .button { display: inline-block; background-color: #4299e1; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 20px; }
+      </style>
+    </head>
+    <body>
+      <h1>${invitationTitle}</h1>
+      <div class="invitation">
+        <p>Dear ${guest.name},</p>
+        <p>You've been invited! Please click the button below to view your personal invitation and RSVP.</p>
+        <p style="text-align: center;">
+          <a href="${window.location.origin}/rsvp/${guest.id}" class="button">View Invitation & RSVP</a>
+        </p>
+      </div>
+      <div class="footer">
+        <p>This invitation was sent using InviteCanvas. If you have any questions, please contact the event organizer.</p>
+      </div>
+    </body>
+    </html>
+    `;
     
-    // In a real app, this would call a serverless function to send emails with personalized invitations
-    toast({
-      title: "Invitations sent",
-      description: `Sent personalized invitations to ${guests.length} guests.`
-    });
+    return html;
+  };
 
-    // Update sent_at timestamp for all guests
-    const updateGuests = async () => {
-      try {
-        const now = new Date().toISOString();
-        const guestIds = guests.map(guest => guest.id);
-        
-        const { error } = await supabase
-          .from('guests')
-          .update({ sent_at: now, rsvp_status: 'sent' })
-          .in('id', guestIds);
-          
-        if (error) throw error;
-        
-        // Refresh the guest list
-        fetchGuests();
-      } catch (error) {
-        console.error('Error updating guests:', error);
-      }
-    };
+  // Function to handle changes to SMTP credentials
+  const handleSmtpInputChange = (field: keyof EmailCredentials, value: any) => {
+    setSmtpCredentials(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+  
+  // Send invitations using the email gateway API
+  const sendInvites = async () => {
+    // Open the SMTP dialog if no credentials are saved
+    if (!smtpCredentials.host || !smtpCredentials.username || !smtpCredentials.password) {
+      setSmtpDialogOpen(true);
+      return;
+    }
     
-    updateGuests();
+    // Check if we have guests and a valid invitation
+    if (!invitationId || !user || !guests.length) {
+      toast({
+        title: "No guests to send to",
+        description: "Please add guests to your invitation first.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    // Start the sending process
+    setIsSendingEmails(true);
+    setShowSendingProgress(true);
+    setSendingProgress(0);
+    
+    const invitationTitle = "Your Invitation"; // In a real app, this would come from the parent component
+    let successCount = 0;
+    let failedCount = 0;
+    
+    try {
+      // Process each guest
+      for (let i = 0; i < guests.length; i++) {
+        const guest = guests[i];
+        
+        // Skip guests who already received invitations
+        if (guest.sent_at) {
+          setSendingProgress(Math.round(((i + 1) / guests.length) * 100));
+          continue;
+        }
+        
+        // Generate personalized HTML for this guest
+        const htmlContent = generatePersonalizedHtml(guest, invitationTitle);
+        
+        // Prepare the email request payload
+        const emailPayload = {
+          smtp: smtpCredentials,
+          email: {
+            fromEmail: smtpCredentials.username,
+            fromName: "Invitation Service",
+            to: [guest.email],
+            subject: `${invitationTitle} - You're Invited!`,
+            text: `Dear ${guest.name}, you've been invited! Please check your email client to view this invitation properly.`,
+            html: htmlContent
+          }
+        };
+        
+        try {
+          // Send the email using the API
+          const response = await fetch('https://email-relay-express-gateway.onrender.com/api/send-mail', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(emailPayload)
+          });
+          
+          const result = await response.json();
+          
+          if (result.success) {
+            // Update the guest's sent_at timestamp in database
+            const { error } = await supabase
+              .from('guests')
+              .update({ sent_at: new Date().toISOString(), rsvp_status: 'sent' })
+              .eq('id', guest.id);
+              
+            if (!error) {
+              successCount++;
+            } else {
+              console.error("Error updating guest status:", error);
+              failedCount++;
+            }
+          } else {
+            console.error("Failed to send email for guest:", guest.name, result);
+            failedCount++;
+          }
+        } catch (error) {
+          console.error("Error sending invitation to", guest.name, error);
+          failedCount++;
+        }
+        
+        // Update progress
+        setSendingProgress(Math.round(((i + 1) / guests.length) * 100));
+      }
+      
+      // Show results
+      if (successCount > 0) {
+        toast({
+          title: "Invitations sent",
+          description: `Successfully sent ${successCount} invitation${successCount !== 1 ? 's' : ''}.${failedCount > 0 ? ` Failed to send ${failedCount}.` : ''}`
+        });
+        
+        // Refresh the guest list to update statuses
+        fetchGuests();
+      } else if (failedCount > 0) {
+        toast({
+          title: "Failed to send invitations",
+          description: `Failed to send ${failedCount} invitation${failedCount !== 1 ? 's' : ''}.`,
+          variant: "destructive"
+        });
+      } else {
+        toast({
+          title: "No invitations sent",
+          description: "All selected guests have already received invitations."
+        });
+      }
+    } catch (error) {
+      console.error("Error in send invitations process:", error);
+      toast({
+        title: "Error sending invitations",
+        description: "There was an unexpected error during the sending process.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSendingEmails(false);
+      // Keep progress dialog open briefly to show completion
+      setTimeout(() => {
+        setShowSendingProgress(false);
+      }, 1500);
+    }
   };
 
   if (isLoading) {
@@ -675,9 +838,22 @@ const GuestList: React.FC<GuestListProps> = ({
             <UploadCloud className="mr-2 h-4 w-4" />
             Import CSV
           </Button>
-          <Button className="w-full sm:flex-1" onClick={sendInvites}>
-            <Mail className="mr-2 h-4 w-4" />
-            Send Invites
+          <Button 
+            className="w-full sm:flex-1" 
+            onClick={sendInvites} 
+            disabled={isSendingEmails}
+          >
+            {isSendingEmails ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Sending...
+              </>
+            ) : (
+              <>
+                <Mail className="mr-2 h-4 w-4" />
+                Send Invites
+              </>
+            )}
           </Button>
           <Button 
             variant="secondary" 
@@ -747,6 +923,143 @@ const GuestList: React.FC<GuestListProps> = ({
           </SheetFooter>
         </SheetContent>
       </Sheet>
+      
+      {/* SMTP Settings Dialog */}
+      <Dialog open={smtpDialogOpen} onOpenChange={setSmtpDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Email Server Settings</DialogTitle>
+            <DialogDescription>
+              Enter your SMTP server details to send invitations via email.
+              These settings will only be used for this session and won't be stored permanently.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="smtp-host" className="text-right">SMTP Host</Label>
+              <Input
+                id="smtp-host"
+                placeholder="smtp.gmail.com"
+                value={smtpCredentials.host}
+                onChange={(e) => handleSmtpInputChange('host', e.target.value)}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="smtp-port" className="text-right">Port</Label>
+              <Input
+                id="smtp-port"
+                type="number"
+                placeholder="587"
+                value={smtpCredentials.port}
+                onChange={(e) => handleSmtpInputChange('port', parseInt(e.target.value))}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="smtp-username" className="text-right">Username</Label>
+              <Input
+                id="smtp-username"
+                placeholder="your-email@gmail.com"
+                value={smtpCredentials.username}
+                onChange={(e) => handleSmtpInputChange('username', e.target.value)}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="smtp-password" className="text-right">Password</Label>
+              <Input
+                id="smtp-password"
+                type="password"
+                placeholder="Password or App Password"
+                value={smtpCredentials.password}
+                onChange={(e) => handleSmtpInputChange('password', e.target.value)}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="smtp-crypto" className="text-right">Security</Label>
+              <select
+                id="smtp-crypto"
+                value={smtpCredentials.crypto}
+                onChange={(e) => handleSmtpInputChange('crypto', e.target.value as "ssl" | "tls" | "none")}
+                className="col-span-3 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <option value="tls">TLS</option>
+                <option value="ssl">SSL</option>
+                <option value="none">None</option>
+              </select>
+            </div>
+            <div className="col-span-full text-xs text-muted-foreground">
+              <p>Note: For Gmail, you may need to use an App Password. <a href="https://support.google.com/accounts/answer/185833" target="_blank" rel="noopener noreferrer" className="text-blue-500 underline">Learn more</a></p>
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setSmtpDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              type="submit" 
+              onClick={() => {
+                setSmtpDialogOpen(false);
+                sendInvites();
+              }}
+              disabled={!smtpCredentials.host || !smtpCredentials.username || !smtpCredentials.password}
+            >
+              Save & Send
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Email sending progress dialog */}
+      <Dialog 
+        open={showSendingProgress} 
+        onOpenChange={(open) => {
+          if (!isSendingEmails) setShowSendingProgress(open);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {sendingProgress === 100 ? "Invitations Sent" : "Sending Invitations"}
+            </DialogTitle>
+            <DialogDescription>
+              {sendingProgress === 100 
+                ? "Your invitations have been sent." 
+                : "Please wait while we send out your invitations."}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="py-6">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">{sendingProgress}%</span>
+            </div>
+            <div className="h-2 w-full bg-secondary overflow-hidden rounded-full">
+              <div 
+                className="h-full bg-primary" 
+                style={{ width: `${sendingProgress}%` }}
+              />
+            </div>
+            <p className="text-center text-sm text-muted-foreground mt-4">
+              {sendingProgress < 100 
+                ? `Processing ${guests.length} invitation${guests.length !== 1 ? 's' : ''}...` 
+                : "All invitations have been processed."}
+            </p>
+          </div>
+          
+          <DialogFooter>
+            <Button 
+              disabled={isSendingEmails} 
+              onClick={() => setShowSendingProgress(false)}
+            >
+              {isSendingEmails ? "Sending..." : "Close"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       
       {/* Original preview dialog (keeping for reference) */}
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
