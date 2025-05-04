@@ -349,61 +349,103 @@ const InvitationEditor = () => {
       for (let i = 0; i < guests.length; i++) {
         const guest = guests[i];
         
-        // Restore canvas to original state
-        fabricCanvas.loadFromJSON(originalCanvasData, () => {
-          // Update progress
-          setDownloadProgress(Math.round((i / guests.length) * 50));
+        // Update progress
+        setDownloadProgress(Math.round((i / guests.length) * 50));
+        
+        try {
+          // Create a new temporary canvas for each guest
+          const tempCanvas = document.createElement('canvas');
+          tempCanvas.width = fabricCanvas.getWidth();
+          tempCanvas.height = fabricCanvas.getHeight();
+          const tempContext = tempCanvas.getContext('2d');
           
-          // Replace placeholders with guest data
-          replaceGuestPlaceholders(guest.name);
+          if (!tempContext) {
+            throw new Error("Could not create canvas context");
+          }
           
-          // Convert canvas to image and add to zip
-          setTimeout(() => {
-            const dataURL = fabricCanvas.toDataURL({
-              format: 'png',
-              quality: 1
+          // Draw background color
+          tempContext.fillStyle = fabricCanvas.backgroundColor as string;
+          tempContext.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+          
+          // Clone the canvas for each guest to avoid tainting issues
+          const clonedCanvas = new fabric.Canvas();
+          
+          // Load from the original JSON but with a clean state
+          clonedCanvas.loadFromJSON(originalCanvasData, () => {
+            // Replace placeholders with guest data
+            const canvasObjects = clonedCanvas.getObjects();
+            
+            // Process each object on canvas
+            canvasObjects.forEach((obj) => {
+              // Handle text objects with {guest_name} placeholder
+              if ((obj.type === 'text' || obj.type === 'i-text') && obj instanceof fabric.Text) {
+                const textObj = obj;
+                const originalText = textObj.text || '';
+                
+                // Replace the placeholder with the actual guest name
+                if (originalText.includes('{guest_name}')) {
+                  textObj.set('text', originalText.replace(/{guest_name}/g, guest.name));
+                }
+              }
             });
             
-            // Convert data URL to binary
-            const binaryData = atob(dataURL.split(',')[1]);
-            const array = [];
-            for (let j = 0; j < binaryData.length; j++) {
-              array.push(binaryData.charCodeAt(j));
-            }
+            clonedCanvas.renderAll();
             
-            // Add to zip file
-            folder?.file(`${guest.name.replace(/[^a-z0-9]/gi, '_')}_invitation.png`, new Uint8Array(array), { base64: false });
-            
-            // Update progress
-            setDownloadProgress(Math.round((i + 1) / guests.length * 100));
-            
-            // If it's the last guest, generate and download the zip file
-            if (i === guests.length - 1) {
-              zip.generateAsync({ type: 'blob' }).then((content) => {
-                // Create download link
-                const downloadLink = document.createElement('a');
-                downloadLink.href = URL.createObjectURL(content);
-                downloadLink.download = `${invitationTitle.replace(/[^a-z0-9]/gi, '_')}_invitations.zip`;
-                document.body.appendChild(downloadLink);
-                downloadLink.click();
-                document.body.removeChild(downloadLink);
+            // Convert the clean canvas to an image
+            // We need to use a timeout to ensure the rendering is complete
+            setTimeout(() => {
+              // Draw the fabric canvas onto our temporary canvas
+              tempContext.drawImage(clonedCanvas.getElement() as HTMLCanvasElement, 0, 0);
+              
+              try {
+                // Convert the temp canvas to data URL
+                const dataURL = tempCanvas.toDataURL('image/png');
                 
-                // Restore original canvas
-                fabricCanvas.loadFromJSON(originalCanvasData, () => {
-                  fabricCanvas.renderAll();
-                  
-                  // Complete download process
-                  setDownloadComplete(true);
-                  
-                  setTimeout(() => {
-                    setIsDownloading(false);
-                    setShowDownloadProgress(false);
-                  }, 2000);
-                });
-              });
-            }
-          }, 100);
-        });
+                // Add to zip file
+                folder?.file(`${guest.name.replace(/[^a-z0-9]/gi, '_')}_invitation.png`, dataURL.split(',')[1], {base64: true});
+                
+                // Clean up the temporary canvas
+                clonedCanvas.dispose();
+                
+                // Update progress
+                setDownloadProgress(Math.round((i + 1) / guests.length * 100));
+                
+                // If it's the last guest, generate and download the zip file
+                if (i === guests.length - 1) {
+                  zip.generateAsync({ type: 'blob' }).then((content) => {
+                    // Create download link
+                    const downloadLink = document.createElement('a');
+                    downloadLink.href = URL.createObjectURL(content);
+                    downloadLink.download = `${invitationTitle.replace(/[^a-z0-9]/gi, '_')}_invitations.zip`;
+                    document.body.appendChild(downloadLink);
+                    downloadLink.click();
+                    document.body.removeChild(downloadLink);
+                    
+                    // Restore original canvas
+                    fabricCanvas.loadFromJSON(originalCanvasData, () => {
+                      fabricCanvas.renderAll();
+                      
+                      // Complete download process
+                      setDownloadComplete(true);
+                      
+                      setTimeout(() => {
+                        setIsDownloading(false);
+                        setShowDownloadProgress(false);
+                      }, 2000);
+                    });
+                  });
+                }
+              } catch (err) {
+                console.error("Error converting canvas to data URL:", err);
+                throw err;
+              }
+            }, 200);
+          });
+        } catch (err) {
+          console.error("Error processing guest:", guest.name, err);
+          // Continue with next guest if one fails
+          continue;
+        }
       }
     } catch (error) {
       console.error('Error generating personalized invitations:', error);
@@ -457,14 +499,15 @@ const InvitationEditor = () => {
               scaleX: qrObj.scaleX,
               scaleY: qrObj.scaleY,
               angle: qrObj.angle,
-              qrTemplate: qrTemplate // Keep the original template
+              qrTemplate: qrTemplate, // Keep the original template
+              crossOrigin: 'anonymous' // Add cross-origin attribute
             });
             
             // Replace the old QR code with the new one
             fabricCanvas.remove(qrObj);
             fabricCanvas.add(newQrImage);
             fabricCanvas.renderAll();
-          });
+          }, { crossOrigin: 'anonymous' }); // Set crossOrigin for image loading
         }
       }
     });

@@ -94,6 +94,9 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
         const imgElement = document.createElement('img');
         imgElement.src = event.target.result as string;
         
+        // Set crossOrigin attribute to prevent canvas tainting
+        imgElement.crossOrigin = "anonymous";
+        
         imgElement.onload = () => {
           // Calculate appropriate dimensions for the canvas
           const maxCanvasWidth = 800; // Maximum width for the canvas
@@ -118,7 +121,8 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
             left: 100,
             top: 100,
             scaleX: 0.3,
-            scaleY: 0.3
+            scaleY: 0.3,
+            crossOrigin: 'anonymous', // Add crossOrigin to prevent canvas tainting
           });
           
           fabricCanvas.add(fabricImage);
@@ -171,7 +175,7 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
       // Generate QR code using a public API
       const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(previewValue)}&size=200x200`;
       
-      // Create image from QR code URL
+      // Create image from QR code URL with crossOrigin attribute
       fabric.Image.fromURL(qrApiUrl, (qrImage) => {
         // Store the original template value as a custom property
         qrImage.set({
@@ -180,6 +184,7 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
           scaleX: 0.5,
           scaleY: 0.5,
           qrTemplate: qrValue, // Store the original template with placeholders
+          crossOrigin: 'anonymous', // Add crossOrigin to prevent canvas tainting
         });
         
         fabricCanvas.add(qrImage);
@@ -194,7 +199,7 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
         });
         
         setIsQrDialogOpen(false);
-      });
+      }, { crossOrigin: 'anonymous' }); // Important: set crossOrigin when loading the image
     } catch (error) {
       console.error("Error creating QR code:", error);
       toast({
