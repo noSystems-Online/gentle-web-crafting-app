@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { fabric } from 'fabric';
@@ -344,7 +345,7 @@ const InvitationEditor = () => {
       const originalCanvasData = fabricCanvas.toJSON();
       
       // Create folder for the invitations
-      const folder = zip.folder(`${invitationTitle.replace(/[^a-z0-9]/gi, '_')}_invitations`);
+      const folder = zip.folder(invitationTitle.replace(/[^a-z0-9]/gi, '_') + "_invitations");
       
       // Generate one image per guest
       for (let i = 0; i < guests.length; i++) {
@@ -409,10 +410,10 @@ const InvitationEditor = () => {
                       const personalized = qrTemplate.replace(/{guest_name}/g, guest.name);
                       
                       // Generate a new QR code URL with the personalized data
-                      const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(personalized)}&size=200x200`;
+                      const qrApiUrl = "https://api.qrserver.com/v1/create-qr-code/?data=" + encodeURIComponent(personalized) + "&size=200x200";
                       
                       // Log for debugging
-                      console.log(`Generating QR for guest ${guest.name} with data: ${personalized}`);
+                      console.log("Generating QR for guest " + guest.name + " with data: " + personalized);
                       
                       // Update the QR code image
                       fabric.Image.fromURL(qrApiUrl, (newQrImage) => {
@@ -466,7 +467,7 @@ const InvitationEditor = () => {
                 const dataURL = tempCanvas.toDataURL('image/png');
                 
                 // Add to zip file
-                folder?.file(`${guest.name.replace(/[^a-z0-9]/gi, '_')}_invitation.png', dataURL.split(',')[1], {base64: true});
+                folder?.file(guest.name.replace(/[^a-z0-9]/gi, '_') + "_invitation.png", dataURL.split(',')[1], {base64: true});
                 
                 // Clean up the temporary canvas to free memory
                 clonedCanvas.dispose();
@@ -495,7 +496,7 @@ const InvitationEditor = () => {
         // Create download link
         const downloadLink = document.createElement('a');
         downloadLink.href = URL.createObjectURL(content);
-        downloadLink.download = `${invitationTitle.replace(/[^a-z0-9]/gi, '_')}_invitations.zip`;
+        downloadLink.download = invitationTitle.replace(/[^a-z0-9]/gi, '_') + "_invitations.zip";
         document.body.appendChild(downloadLink);
         downloadLink.click();
         document.body.removeChild(downloadLink);
@@ -557,7 +558,7 @@ const InvitationEditor = () => {
           const personalized = qrTemplate.replace(/{guest_name}/g, guestName);
           
           // Generate a new QR code URL with the personalized data
-          const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(personalized)}&size=200x200`;
+          const qrApiUrl = "https://api.qrserver.com/v1/create-qr-code/?data=" + encodeURIComponent(personalized) + "&size=200x200";
           
           // Update the QR code image
           fabric.Image.fromURL(qrApiUrl, (newQrImage) => {
@@ -765,7 +766,7 @@ const InvitationEditor = () => {
             <p className="text-center text-sm text-muted-foreground mt-2">
               {downloadComplete 
                 ? "100% Complete" 
-                : `${downloadProgress}% Complete - Processing ${guests.length} invitation${guests.length !== 1 ? 's' : ''}`}
+                : downloadProgress + "% Complete - Processing " + guests.length + " invitation" + (guests.length !== 1 ? 's' : '')}
             </p>
           </div>
           
