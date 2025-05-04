@@ -1,3 +1,4 @@
+
 import React, { useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -72,10 +73,10 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
       reader.onload = (event) => {
         if (!event.target || !fabricCanvas) return;
         
-        const imgElement = new Image();
+        // Fix: Use the correct HTMLImageElement constructor
+        const imgElement = document.createElement('img');
         imgElement.src = event.target.result as string;
         imgElement.onload = () => {
-          // Fixed: Use fabric.Image.fromElement() with proper parameters
           const fabricImage = new fabric.Image(imgElement, {
             left: 100,
             top: 100,
