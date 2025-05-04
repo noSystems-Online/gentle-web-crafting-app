@@ -22,10 +22,20 @@ import {
   TableHeader, 
   TableRow 
 } from "@/components/ui/table";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+  SheetClose,
+  SheetFooter,
+} from "@/components/ui/sheet";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
-import { Plus, Mail, Trash2, UploadCloud, Lock, AlertCircle, Eye } from "lucide-react";
+import { Plus, Mail, Trash2, UploadCloud, Lock, AlertCircle, Eye, ChevronLeft, ChevronRight } from "lucide-react";
 import { Link } from "react-router-dom";
 
 interface GuestListProps {
@@ -59,6 +69,13 @@ const GuestList: React.FC<GuestListProps> = ({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [currentPreviewGuest, setCurrentPreviewGuest] = useState<Guest | null>(null);
+  // New states for the preview carousel
+  const [previewCarouselOpen, setPreviewCarouselOpen] = useState(false);
+  const [currentGuestIndex, setCurrentGuestIndex] = useState(0);
+  const [previewCanvasRef, setPreviewCanvasRef] = useState<HTMLCanvasElement | null>(null);
+  const [previewCanvas, setPreviewCanvas] = useState<fabric.Canvas | null>(null);
+  const previewCanvasContainerRef = React.useRef<HTMLDivElement>(null);
+
   const { toast } = useToast();
   const { user } = useAuth();
   
@@ -70,6 +87,71 @@ const GuestList: React.FC<GuestListProps> = ({
       setIsLoading(false);
     }
   }, [invitationId, user]);
+
+  // Create preview canvas when the carousel sheet is opened
+  useEffect(() => {
+    if (previewCarouselOpen && previewCanvasRef && fabricCanvas) {
+      // Create a new fabric canvas for the preview
+      const canvas = new fabric.Canvas(previewCanvasRef, {
+        width: fabricCanvas.getWidth(),
+        height: fabricCanvas.getHeight(),
+        backgroundColor: fabricCanvas.backgroundColor || '#ffffff',
+      });
+      
+      setPreviewCanvas(canvas);
+      
+      // Load the original canvas content
+      canvas.loadFromJSON(fabricCanvas.toJSON(), () => {
+        if (guests.length > 0) {
+          updatePreviewForGuest(guests[currentGuestIndex], canvas);
+        }
+      });
+      
+      return () => {
+        canvas.dispose();
+        setPreviewCanvas(null);
+      };
+    }
+  }, [previewCarouselOpen, previewCanvasRef, fabricCanvas]);
+
+  // Update preview when navigating between guests
+  useEffect(() => {
+    if (previewCanvas && guests.length > 0) {
+      updatePreviewForGuest(guests[currentGuestIndex], previewCanvas);
+    }
+  }, [currentGuestIndex, guests]);
+
+  // Adjust canvas size when window resizes
+  useEffect(() => {
+    const handleResize = () => {
+      if (previewCanvas && previewCanvasContainerRef.current && fabricCanvas) {
+        const containerWidth = previewCanvasContainerRef.current.clientWidth;
+        const originalWidth = fabricCanvas.getWidth();
+        const originalHeight = fabricCanvas.getHeight();
+        const scaleFactor = Math.min(containerWidth / originalWidth, 0.8);
+        
+        // Clone canvas at original size but display it scaled
+        const displayWidth = Math.floor(originalWidth * scaleFactor);
+        const displayHeight = Math.floor(originalHeight * scaleFactor);
+        
+        previewCanvas.setDimensions({
+          width: displayWidth,
+          height: displayHeight
+        }, { cssOnly: true });
+      }
+    };
+    
+    window.addEventListener('resize', handleResize);
+    
+    // Initial sizing
+    if (previewCarouselOpen) {
+      setTimeout(handleResize, 100); // Wait for sheet to open
+    }
+    
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [previewCarouselOpen, previewCanvas, fabricCanvas]);
 
   const fetchGuests = async () => {
     if (!invitationId) return;
@@ -265,6 +347,98 @@ const GuestList: React.FC<GuestListProps> = ({
     fabricCanvas.renderAll();
   };
 
+  // Function to update preview canvas for a specific guest
+  const updatePreviewForGuest = async (guest: Guest, canvas: fabric.Canvas) => {
+    // Load the original canvas data first
+    if (fabricCanvas) {
+      canvas.loadFromJSON(fabricCanvas.toJSON(), async () => {
+        // Find the canvas objects
+        const canvasObjects = canvas.getObjects();
+        const qrCodePromises: Promise<void>[] = [];
+        
+        // Look for text objects that contain "{guest_name}" placeholder
+        for (const obj of canvasObjects) {
+          // Handle text objects with {guest_name} placeholder
+          if ((obj.type === 'text' || obj.type === 'i-text') && obj instanceof fabric.Text) {
+            const textObj = obj;
+            const originalText = textObj.text || '';
+            
+            // Replace the placeholder with the actual guest name
+            if (originalText.includes('{guest_name}')) {
+              textObj.set('text', originalText.replace(/{guest_name}/g, guest.name));
+              canvas.renderAll();
+            }
+          }
+          
+          // Handle QR codes with {guest_name} placeholder in their template
+          if (obj.type === 'image' && 'qrTemplate' in obj && typeof obj.qrTemplate === 'string') {
+            const qrObj = obj as fabric.Image & { qrTemplate: string };
+            const qrTemplate = qrObj.qrTemplate;
+            
+            // If the QR code has a template with the placeholder
+            if (qrTemplate && qrTemplate.includes('{guest_name}')) {
+              // Create a promise to update the QR code
+              const qrPromise = new Promise<void>((resolve) => {
+                // Replace the placeholder with the actual guest name
+                const personalized = qrTemplate.replace(/{guest_name}/g, guest.name);
+                
+                // Generate a new QR code URL with the personalized data
+                const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(personalized)}&size=200x200`;
+                
+                // Update the QR code image
+                fabric.Image.fromURL(qrApiUrl, (newQrImage) => {
+                  // Keep the position, scale, etc. of the original QR code
+                  newQrImage.set({
+                    left: qrObj.left,
+                    top: qrObj.top,
+                    scaleX: qrObj.scaleX,
+                    scaleY: qrObj.scaleY,
+                    angle: qrObj.angle,
+                    qrTemplate: qrTemplate, // Keep the original template
+                    crossOrigin: 'anonymous' // Add cross-origin attribute
+                  });
+                  
+                  // Replace the old QR code with the new one
+                  const index = canvas.getObjects().indexOf(qrObj);
+                  canvas.remove(qrObj);
+                  canvas.insertAt(newQrImage, index);
+                  canvas.renderAll();
+                  resolve();
+                }, { crossOrigin: 'anonymous' }); // Set crossOrigin for image loading
+              });
+              
+              qrCodePromises.push(qrPromise);
+            }
+          }
+        }
+        
+        // Wait for all QR codes to be updated
+        await Promise.all(qrCodePromises);
+        
+        canvas.renderAll();
+      });
+    }
+  };
+
+  // Functions to navigate between guests in the preview
+  const nextGuest = () => {
+    setCurrentGuestIndex((prev) => 
+      prev === guests.length - 1 ? 0 : prev + 1
+    );
+  };
+
+  const prevGuest = () => {
+    setCurrentGuestIndex((prev) => 
+      prev === 0 ? guests.length - 1 : prev - 1
+    );
+  };
+
+  // Function to open the preview carousel and set the initial guest
+  const openPreviewCarousel = (initialGuestIndex = 0) => {
+    setCurrentGuestIndex(initialGuestIndex);
+    setPreviewCarouselOpen(true);
+  };
+
   const sendInvites = () => {
     if (!invitationId || !user || !guests.length) return;
     
@@ -409,7 +583,7 @@ const GuestList: React.FC<GuestListProps> = ({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {guests.map((guest) => (
+                {guests.map((guest, index) => (
                   <TableRow key={guest.id}>
                     <TableCell>{guest.name}</TableCell>
                     <TableCell>{guest.email}</TableCell>
@@ -423,7 +597,7 @@ const GuestList: React.FC<GuestListProps> = ({
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => previewInvitation(guest)}
+                          onClick={() => openPreviewCarousel(index)}
                         >
                           <Eye className="h-4 w-4" />
                         </Button>
@@ -458,9 +632,78 @@ const GuestList: React.FC<GuestListProps> = ({
             <Mail className="mr-2 h-4 w-4" />
             Send Invites
           </Button>
+          {guests.length > 0 && (
+            <Button 
+              variant="secondary" 
+              className="flex-1" 
+              onClick={() => openPreviewCarousel()}
+            >
+              <Eye className="mr-2 h-4 w-4" />
+              Preview All
+            </Button>
+          )}
         </div>
       )}
       
+      {/* Preview Carousel Sheet */}
+      <Sheet open={previewCarouselOpen} onOpenChange={setPreviewCarouselOpen}>
+        <SheetContent className="w-full sm:max-w-3xl overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>Personalized Preview</SheetTitle>
+            <SheetDescription>
+              Preview how the invitation will appear with each guest's name.
+              {guests.length > 0 && (
+                <span className="block mt-1 font-medium">
+                  Viewing invitation for: <span className="text-foreground">{guests[currentGuestIndex]?.name}</span>
+                  <span className="ml-2 text-muted-foreground">({currentGuestIndex + 1} of {guests.length})</span>
+                </span>
+              )}
+            </SheetDescription>
+          </SheetHeader>
+          
+          <div className="py-6 flex flex-col items-center justify-center">
+            <div 
+              className="border bg-background rounded-lg overflow-hidden mb-4 max-w-full"
+              ref={previewCanvasContainerRef}
+            >
+              <canvas 
+                ref={(ref) => setPreviewCanvasRef(ref)} 
+                className="mx-auto"
+              />
+            </div>
+            
+            {guests.length > 1 && (
+              <div className="flex items-center justify-center gap-4 mt-4">
+                <Button 
+                  variant="outline" 
+                  size="icon"
+                  onClick={prevGuest}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="text-sm font-medium text-center min-w-[140px]">
+                  {currentGuestIndex + 1} / {guests.length}
+                </span>
+                <Button 
+                  variant="outline" 
+                  size="icon"
+                  onClick={nextGuest}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+          </div>
+          
+          <SheetFooter>
+            <SheetClose asChild>
+              <Button variant="outline">Close Preview</Button>
+            </SheetClose>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
+      
+      {/* Original preview dialog (keeping for reference but can be removed) */}
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
         <DialogContent className="max-w-4xl">
           <DialogHeader>
