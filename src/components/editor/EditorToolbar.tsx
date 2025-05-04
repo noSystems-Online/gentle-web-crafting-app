@@ -1,3 +1,4 @@
+
 import React, { useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -166,16 +167,19 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
     }
     
     try {
-      // The value might contain a placeholder like {guest_name}
-      // We'll use a temporary value for the preview, but keep the original value for generation
-      let previewValue = qrValue;
+      // Store the template value for later use
+      const templateValue = qrValue;
       
-      // For preview purposes, replace placeholder with "Guest" to show something meaningful
-      if (qrValue.includes("{guest_name}")) {
-        previewValue = qrValue.replace("{guest_name}", "Guest");
+      // For preview purposes, we'll use a temporary value
+      // If the value contains placeholders, use a sample value for preview
+      let previewValue = templateValue;
+      
+      // For preview purposes, replace placeholder with "Preview" to show something meaningful
+      if (templateValue.includes("{guest_name}")) {
+        previewValue = templateValue.replace("{guest_name}", "Preview");
       }
       
-      // Generate QR code using a public API
+      // Generate QR code using a public API with the preview value
       const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(previewValue)}&size=200x200`;
       
       // Create image from QR code URL with crossOrigin attribute
@@ -186,7 +190,7 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
           top: 100,
           scaleX: 0.5,
           scaleY: 0.5,
-          qrTemplate: qrValue, // Store the original template with placeholders
+          qrTemplate: templateValue, // Store the original template with placeholders
           crossOrigin: 'anonymous', // Add crossOrigin to prevent canvas tainting
         });
         
@@ -196,7 +200,7 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
         
         toast({
           title: "QR Code added",
-          description: qrValue.includes("{guest_name}") 
+          description: templateValue.includes("{guest_name}") 
             ? "Dynamic QR code added. It will be personalized for each guest."
             : "Your QR code has been added to the canvas.",
         });

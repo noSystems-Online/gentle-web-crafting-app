@@ -198,14 +198,15 @@ const GuestList: React.FC<GuestListProps> = ({
     }
   };
   
-  const updatePreviewWithGuestName = (guestName: string) => {
+  const updatePreviewWithGuestName = async (guestName: string) => {
     if (!fabricCanvas) return;
 
     // Find the canvas objects
     const canvasObjects = fabricCanvas.getObjects();
+    const qrCodePromises: Promise<void>[] = [];
     
     // Look for text objects that contain "{guest_name}" placeholder
-    canvasObjects.forEach((obj) => {
+    for (const obj of canvasObjects) {
       // Handle text objects with {guest_name} placeholder
       if ((obj.type === 'text' || obj.type === 'i-text') && obj instanceof fabric.Text) {
         const textObj = obj;
@@ -214,7 +215,6 @@ const GuestList: React.FC<GuestListProps> = ({
         // Replace the placeholder with the actual guest name
         if (originalText.includes('{guest_name}')) {
           textObj.set('text', originalText.replace(/{guest_name}/g, guestName));
-          fabricCanvas.renderAll();
         }
       }
       
@@ -225,32 +225,44 @@ const GuestList: React.FC<GuestListProps> = ({
         
         // If the QR code has a template with the placeholder
         if (qrTemplate && qrTemplate.includes('{guest_name}')) {
-          const personalized = qrTemplate.replace(/{guest_name}/g, guestName);
-          
-          // Generate a new QR code URL with the personalized data
-          const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(personalized)}&size=200x200`;
-          
-          // Update the QR code image
-          fabric.Image.fromURL(qrApiUrl, (newQrImage) => {
-            // Keep the position, scale, etc. of the original QR code
-            newQrImage.set({
-              left: qrObj.left,
-              top: qrObj.top,
-              scaleX: qrObj.scaleX,
-              scaleY: qrObj.scaleY,
-              angle: qrObj.angle,
-              qrTemplate: qrTemplate // Keep the original template
-            });
+          // Create a promise to update the QR code
+          const qrPromise = new Promise<void>((resolve) => {
+            // Replace the placeholder with the actual guest name
+            const personalized = qrTemplate.replace(/{guest_name}/g, guestName);
             
-            // Replace the old QR code with the new one
-            const index = fabricCanvas.getObjects().indexOf(qrObj);
-            fabricCanvas.remove(qrObj);
-            fabricCanvas.insertAt(newQrImage, index);
-            fabricCanvas.renderAll();
+            // Generate a new QR code URL with the personalized data
+            const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(personalized)}&size=200x200`;
+            
+            // Update the QR code image
+            fabric.Image.fromURL(qrApiUrl, (newQrImage) => {
+              // Keep the position, scale, etc. of the original QR code
+              newQrImage.set({
+                left: qrObj.left,
+                top: qrObj.top,
+                scaleX: qrObj.scaleX,
+                scaleY: qrObj.scaleY,
+                angle: qrObj.angle,
+                qrTemplate: qrTemplate, // Keep the original template
+                crossOrigin: 'anonymous' // Add cross-origin attribute
+              });
+              
+              // Replace the old QR code with the new one
+              const index = fabricCanvas.getObjects().indexOf(qrObj);
+              fabricCanvas.remove(qrObj);
+              fabricCanvas.insertAt(newQrImage, index);
+              resolve();
+            }, { crossOrigin: 'anonymous' }); // Set crossOrigin for image loading
           });
+          
+          qrCodePromises.push(qrPromise);
         }
       }
-    });
+    }
+    
+    // Wait for all QR codes to be updated
+    await Promise.all(qrCodePromises);
+    
+    fabricCanvas.renderAll();
   };
 
   const sendInvites = () => {
