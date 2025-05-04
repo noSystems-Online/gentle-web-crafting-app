@@ -632,16 +632,14 @@ const GuestList: React.FC<GuestListProps> = ({
             <Mail className="mr-2 h-4 w-4" />
             Send Invites
           </Button>
-          {guests.length > 0 && (
-            <Button 
-              variant="secondary" 
-              className="flex-1" 
-              onClick={() => openPreviewCarousel()}
-            >
-              <Eye className="mr-2 h-4 w-4" />
-              Preview All
-            </Button>
-          )}
+          <Button 
+            variant="secondary" 
+            className="flex-1 bg-blue-100 hover:bg-blue-200 text-blue-700 border border-blue-300"
+            onClick={() => openPreviewCarousel()}
+          >
+            <Eye className="mr-2 h-4 w-4" />
+            Preview All
+          </Button>
         </div>
       )}
       
