@@ -1,3 +1,4 @@
+
 import React, { useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +9,11 @@ import {
   Text as TextIcon,
   Trash,
   Image,
-  QrCode
+  QrCode,
+  MoveUp,
+  MoveDown,
+  SendToBack,
+  BringToFront
 } from "lucide-react";
 import { 
   Tooltip,
@@ -29,6 +34,15 @@ import { useFeatureAccess } from '@/hooks/use-feature-access';
 import { useToast } from "@/hooks/use-toast";
 import { fabric } from 'fabric';
 import { supabase } from '@/integrations/supabase/client';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface EditorToolbarProps {
   onAddText: () => void;
@@ -189,6 +203,59 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
     }
   };
 
+  // Layer arrangement handlers
+  const handleBringToFront = () => {
+    if (!fabricCanvas || !fabricCanvas.getActiveObject()) return;
+    
+    const activeObject = fabricCanvas.getActiveObject();
+    activeObject.bringToFront();
+    fabricCanvas.renderAll();
+    
+    toast({
+      title: "Object arrangement",
+      description: "Brought object to front",
+    });
+  };
+  
+  const handleSendToBack = () => {
+    if (!fabricCanvas || !fabricCanvas.getActiveObject()) return;
+    
+    const activeObject = fabricCanvas.getActiveObject();
+    activeObject.sendToBack();
+    fabricCanvas.renderAll();
+    
+    toast({
+      title: "Object arrangement",
+      description: "Sent object to back",
+    });
+  };
+  
+  const handleBringForward = () => {
+    if (!fabricCanvas || !fabricCanvas.getActiveObject()) return;
+    
+    const activeObject = fabricCanvas.getActiveObject();
+    activeObject.bringForward();
+    fabricCanvas.renderAll();
+    
+    toast({
+      title: "Object arrangement",
+      description: "Brought object forward one layer",
+    });
+  };
+  
+  const handleSendBackward = () => {
+    if (!fabricCanvas || !fabricCanvas.getActiveObject()) return;
+    
+    const activeObject = fabricCanvas.getActiveObject();
+    activeObject.sendBackwards();
+    fabricCanvas.renderAll();
+    
+    toast({
+      title: "Object arrangement",
+      description: "Sent object backward one layer",
+    });
+  };
+
   return (
     <div className="flex items-center gap-2 p-2 border rounded-md bg-background">
       <TooltipProvider>
@@ -283,48 +350,51 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
           </TooltipContent>
         </Tooltip>
         
-        <Dialog open={isQrDialogOpen} onOpenChange={setIsQrDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Create QR Code</DialogTitle>
-              <DialogDescription>
-                Enter a URL, text, or use dynamic placeholders like {'{guest_name}'} that will be replaced with each guest's information.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div>
-                <label htmlFor="qrValue" className="block text-sm font-medium mb-2">
-                  Website URL or Text
-                </label>
-                <Input
-                  id="qrValue"
-                  placeholder="https://example.com or {guest_name}"
-                  value={qrValue}
-                  onChange={(e) => setQrValue(e.target.value)}
-                />
-                <p className="text-xs text-muted-foreground mt-2">
-                  Tip: You can use {'{guest_name}'} placeholder which will be replaced with the guest's name.
-                </p>
-              </div>
-              <div className="bg-muted rounded-md p-3">
-                <h4 className="text-sm font-medium mb-1">Examples:</h4>
-                <ul className="text-xs space-y-1 text-muted-foreground">
-                  <li>• Personal greeting: <span className="font-mono">Hello {'{guest_name}'}!</span></li>
-                  <li>• Custom URL: <span className="font-mono">https://rsvp.com?guest={'{guest_name}'}</span></li>
-                </ul>
-              </div>
-              <Button 
-                onClick={addQrCode}
-                disabled={!qrValue.trim()}
-                className="w-full"
-              >
-                Create QR Code
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-
         <div className="border-r h-6 mx-2" />
+        
+        {/* Layer arrangement dropdown menu */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  disabled={!hasSelection}
+                  className="h-8 px-2 flex items-center gap-1"
+                >
+                  <BringToFront className="h-4 w-4" />
+                  <span className="text-xs">Arrange</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                <DropdownMenuLabel>Layer Order</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuGroup>
+                  <DropdownMenuItem onClick={handleBringToFront} disabled={!hasSelection}>
+                    <BringToFront className="h-4 w-4 mr-2" />
+                    Bring to Front
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleSendToBack} disabled={!hasSelection}>
+                    <SendToBack className="h-4 w-4 mr-2" />
+                    Send to Back
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleBringForward} disabled={!hasSelection}>
+                    <MoveUp className="h-4 w-4 mr-2" />
+                    Bring Forward
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleSendBackward} disabled={!hasSelection}>
+                    <MoveDown className="h-4 w-4 mr-2" />
+                    Send Backward
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Arrange Layers</p>
+          </TooltipContent>
+        </Tooltip>
 
         <Tooltip>
           <TooltipTrigger asChild>
@@ -343,6 +413,47 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
+      
+      <Dialog open={isQrDialogOpen} onOpenChange={setIsQrDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create QR Code</DialogTitle>
+            <DialogDescription>
+              Enter a URL, text, or use dynamic placeholders like {'{guest_name}'} that will be replaced with each guest's information.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <label htmlFor="qrValue" className="block text-sm font-medium mb-2">
+                Website URL or Text
+              </label>
+              <Input
+                id="qrValue"
+                placeholder="https://example.com or {guest_name}"
+                value={qrValue}
+                onChange={(e) => setQrValue(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground mt-2">
+                Tip: You can use {'{guest_name}'} placeholder which will be replaced with the guest's name.
+              </p>
+            </div>
+            <div className="bg-muted rounded-md p-3">
+              <h4 className="text-sm font-medium mb-1">Examples:</h4>
+              <ul className="text-xs space-y-1 text-muted-foreground">
+                <li>• Personal greeting: <span className="font-mono">Hello {'{guest_name}'}!</span></li>
+                <li>• Custom URL: <span className="font-mono">https://rsvp.com?guest={'{guest_name}'}</span></li>
+              </ul>
+            </div>
+            <Button 
+              onClick={addQrCode}
+              disabled={!qrValue.trim()}
+              className="w-full"
+            >
+              Create QR Code
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

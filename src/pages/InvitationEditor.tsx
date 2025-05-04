@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { fabric } from 'fabric';
@@ -42,6 +43,7 @@ const InvitationEditor = () => {
       width: 600,
       height: 400,
       backgroundColor: '#ffffff',
+      preserveObjectStacking: true, // Maintain z-index when selecting objects
     });
 
     // Handle selection changes
