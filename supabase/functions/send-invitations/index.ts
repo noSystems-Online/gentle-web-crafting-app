@@ -9,7 +9,7 @@ const corsHeaders = {
 
 // SMTP configuration from environment variables
 const smtpConfig = {
-  host: Deno.env.get("SMTP_HOST") || "smtp.gmail.com",
+  host: Deno.env.get("SMTP_HOST") || "",
   port: parseInt(Deno.env.get("SMTP_PORT") || "587"),
   username: Deno.env.get("SMTP_USERNAME") || "",
   password: Deno.env.get("SMTP_PASSWORD") || "",
@@ -100,9 +100,12 @@ serve(async (req) => {
       });
     }
 
-    // Check email sending capability
-    const useEmailJs = !smtpConfig.username || !smtpConfig.password;
-    if (useEmailJs && (!EMAILJS_SERVICE_ID || !EMAILJS_TEMPLATE_ID || !EMAILJS_USER_ID)) {
+    // Check if SMTP is configured - we now check if the SMTP host is set rather than username/password
+    // This makes SMTP the priority if it's configured
+    const smtpConfigured = !!smtpConfig.host && !!smtpConfig.username && !!smtpConfig.password;
+    
+    // Only check EmailJS as fallback if SMTP is not configured
+    if (!smtpConfigured && (!EMAILJS_SERVICE_ID || !EMAILJS_TEMPLATE_ID || !EMAILJS_USER_ID)) {
       return new Response(JSON.stringify({
         success: false,
         error: "No email sending method configured",
@@ -156,8 +159,8 @@ serve(async (req) => {
 
         let emailSent = false;
         
-        // Try to send email using preferred method
-        if (!useEmailJs) {
+        // Try SMTP first if it's configured
+        if (smtpConfigured) {
           try {
             // Prepare email payload for SMTP relay
             const emailPayload = {
@@ -172,6 +175,8 @@ serve(async (req) => {
               }
             };
 
+            console.log("Sending email via SMTP to:", guest.email);
+            
             // Send email using relay service
             const response = await fetch(EMAIL_RELAY_URL, {
               method: 'POST',
@@ -188,20 +193,25 @@ serve(async (req) => {
                 guestId: guest.id,
                 name: guest.name,
                 status: "success",
-                messageId: result.messageId || "sent"
+                messageId: result.messageId || "sent",
+                method: "smtp"
               });
+              console.log("Email sent successfully via SMTP to:", guest.email);
             } else {
+              console.error("SMTP sending failed with result:", result);
               throw new Error(result.message || "SMTP sending failed");
             }
           } catch (err) {
             console.error("SMTP sending failed:", err);
-            // Will try EmailJS as fallback if SMTP fails
+            // Will try EmailJS as fallback below if SMTP fails
           }
         }
         
-        // Try EmailJS as fallback or primary method
+        // Try EmailJS as fallback ONLY if SMTP failed or isn't configured
         if (!emailSent && EMAILJS_SERVICE_ID && EMAILJS_TEMPLATE_ID && EMAILJS_USER_ID) {
           try {
+            console.log("Falling back to EmailJS for:", guest.email);
+            
             const emailjsPayload = {
               service_id: EMAILJS_SERVICE_ID,
               template_id: EMAILJS_TEMPLATE_ID,
@@ -229,8 +239,10 @@ serve(async (req) => {
                 guestId: guest.id,
                 name: guest.name,
                 status: "success",
-                messageId: "emailjs-sent"
+                messageId: "emailjs-sent",
+                method: "emailjs"
               });
+              console.log("Email sent successfully via EmailJS to:", guest.email);
             } else {
               throw new Error(`EmailJS failed with status ${response.status}`);
             }
