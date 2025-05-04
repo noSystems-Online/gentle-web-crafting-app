@@ -40,7 +40,14 @@ const CropTool: React.FC<CropToolProps> = ({
     setOriginalDimensions({ width: canvasWidth, height: canvasHeight });
     
     // Clone all objects to restore them if needed
-    setOriginalObjects(fabricCanvas.getObjects().map(obj => obj.clone()));
+    const clonedObjects: fabric.Object[] = [];
+    fabricCanvas.getObjects().forEach(obj => {
+      // Use fabric's clone method with proper type handling
+      obj.clone((clonedObj: fabric.Object) => {
+        clonedObjects.push(clonedObj);
+      });
+    });
+    setOriginalObjects(clonedObjects);
     
     // Create the crop rectangle
     const rect = new fabric.Rect({
