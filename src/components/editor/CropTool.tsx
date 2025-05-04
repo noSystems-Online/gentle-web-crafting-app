@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useToast } from '@/hooks/use-toast';
 
 interface CropToolProps {
@@ -27,7 +28,7 @@ const CropTool: React.FC<CropToolProps> = ({
   const [cropRect, setCropRect] = useState<fabric.Rect | null>(null);
   const [originalObjects, setOriginalObjects] = useState<fabric.Object[]>([]);
   const [originalDimensions, setOriginalDimensions] = useState({ width: 0, height: 0 });
-  const [isDialogOpen, setIsDialogOpen] = useState(true);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
   const { toast } = useToast();
 
   // Initialize crop tool
@@ -82,7 +83,7 @@ const CropTool: React.FC<CropToolProps> = ({
     
     toast({
       title: "Crop Tool Activated",
-      description: "Adjust the blue rectangle to define the crop area, then click Apply.",
+      description: "Adjust the blue rectangle to define the crop area, then click the Apply button in the toolbar.",
     });
     
     // Clean up on unmount
@@ -101,10 +102,14 @@ const CropTool: React.FC<CropToolProps> = ({
     };
   }, [fabricCanvas]);
 
+  // Show the dialog for confirming crop action
+  const showCropConfirmation = () => {
+    setIsDialogOpen(true);
+  };
+
   // Handle dialog close
   const handleDialogClose = () => {
     setIsDialogOpen(false);
-    onCancel();
   };
 
   // Apply the crop
@@ -192,31 +197,53 @@ const CropTool: React.FC<CropToolProps> = ({
   };
 
   return (
-    <Dialog open={isDialogOpen} onOpenChange={(open) => {
-      if (!open) cancelCrop();
-      setIsDialogOpen(open);
-    }}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Crop Canvas</DialogTitle>
-          <DialogDescription>
-            Adjust the blue rectangle to define the area you want to keep. 
-            Everything outside this area will be removed.
-          </DialogDescription>
-        </DialogHeader>
+    <>
+      {/* Floating action buttons for crop actions */}
+      <div className="absolute top-4 left-4 z-10 flex gap-2">
+        <Button 
+          variant="default" 
+          size="sm" 
+          onClick={showCropConfirmation}
+          className="flex items-center gap-1"
+        >
+          <Crop className="h-4 w-4" />
+          Apply Crop
+        </Button>
         
-        <DialogFooter className="flex flex-col sm:flex-row gap-2 sm:justify-between mt-4">
-          <Button variant="outline" onClick={cancelCrop} className="sm:flex-1">
-            <X className="mr-1 h-4 w-4" />
-            Cancel
-          </Button>
-          <Button onClick={applyCrop} className="sm:flex-1">
-            <Crop className="mr-1 h-4 w-4" />
-            Apply Crop
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={cancelCrop}
+          className="flex items-center gap-1"
+        >
+          <X className="h-4 w-4" />
+          Cancel
+        </Button>
+      </div>
+      
+      {/* Confirmation dialog */}
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Crop Canvas</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to crop the canvas? This will remove everything outside the selected area.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <DialogFooter className="flex flex-col sm:flex-row gap-2 sm:justify-between mt-4">
+            <Button variant="outline" onClick={handleDialogClose} className="sm:flex-1">
+              <X className="mr-1 h-4 w-4" />
+              Cancel
+            </Button>
+            <Button onClick={applyCrop} className="sm:flex-1">
+              <Crop className="mr-1 h-4 w-4" />
+              Apply Crop
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 };
 
