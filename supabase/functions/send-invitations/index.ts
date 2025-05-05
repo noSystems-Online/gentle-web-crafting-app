@@ -100,6 +100,9 @@ serve(async (req) => {
       });
     }
 
+    // Get the reply-to email address from the invitation
+    const replyToEmail = invitation.reply_to_email || null;
+
     // Check if SMTP is configured - we now check if the SMTP host is set rather than username/password
     // This makes SMTP the priority if it's configured
     const smtpConfigured = !!smtpConfig.host && !!smtpConfig.username && !!smtpConfig.password;
@@ -168,6 +171,7 @@ serve(async (req) => {
               email: {
                 fromEmail: smtpConfig.username,
                 fromName: "Invitation Service",
+                replyTo: replyToEmail, // Add the reply-to email address if available
                 to: [guest.email],
                 subject: `${invitationTitle} - You're Invited!`,
                 text: `Dear ${guest.name}, you've been invited! Please check your email client to view this invitation properly.`,
@@ -221,7 +225,8 @@ serve(async (req) => {
                 to_name: guest.name,
                 invitation_title: invitationTitle,
                 rsvp_link: `${publicAppUrl}/rsvp/${guest.id}`,
-                message: `Please join us! View your invitation and RSVP here: ${publicAppUrl}/rsvp/${guest.id}`
+                message: `Please join us! View your invitation and RSVP here: ${publicAppUrl}/rsvp/${guest.id}`,
+                reply_to: replyToEmail || "" // Add reply-to for EmailJS template
               }
             };
             

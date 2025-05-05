@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { fabric } from 'fabric';
@@ -16,7 +15,7 @@ import TextControls from '@/components/editor/TextControls';
 import TemplateSelector from '@/components/editor/TemplateSelector';
 import GuestList from '@/components/editor/GuestList';
 import CropTool from '@/components/editor/CropTool';
-import { AlertCircle, Download } from 'lucide-react';
+import { AlertCircle, Download, Mail } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -26,6 +25,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 
 interface Guest {
   id: string;
@@ -42,6 +44,7 @@ const InvitationEditor = () => {
   const [activeObject, setActiveObject] = useState<fabric.Object | null>(null);
   const [invitationTitle, setInvitationTitle] = useState("Untitled Invitation");
   const [description, setDescription] = useState("");
+  const [replyToEmail, setReplyToEmail] = useState(""); // New state for reply-to email
   const [isSaving, setIsSaving] = useState(false);
   const [activeTab, setActiveTab] = useState("design");
   const { toast } = useToast();
@@ -232,6 +235,7 @@ const InvitationEditor = () => {
       if (data) {
         setInvitationTitle(data.title);
         setDescription(data.description || '');
+        setReplyToEmail(data.reply_to_email || ''); // Load reply-to email
         
         if (data.editor_data && fabricCanvas) {
           try {
@@ -272,6 +276,7 @@ const InvitationEditor = () => {
       const invitationData = {
         title: invitationTitle,
         description: description,
+        reply_to_email: replyToEmail, // Save the reply-to email
         editor_data: canvasData,
         user_id: user.id,
         status: 'draft',
@@ -647,12 +652,31 @@ const InvitationEditor = () => {
                   
                   <div>
                     <label htmlFor="description" className="block text-sm font-medium mb-1">Description (Optional)</label>
-                    <Input
+                    <Textarea
                       id="description"
                       value={description}
                       onChange={(e) => setDescription(e.target.value)}
                       placeholder="Enter a description"
+                      className="min-h-20"
                     />
+                  </div>
+                  
+                  {/* New reply-to email field */}
+                  <div>
+                    <Label htmlFor="replyToEmail" className="flex items-center gap-2">
+                      <Mail className="h-4 w-4" /> Reply-To Email Address
+                    </Label>
+                    <Input
+                      id="replyToEmail"
+                      type="email"
+                      value={replyToEmail}
+                      onChange={(e) => setReplyToEmail(e.target.value)}
+                      placeholder="guests-can-reply@example.com"
+                      className="mt-1"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Email address where guests can reply to your invitation.
+                    </p>
                   </div>
 
                   <Tabs value={activeTab} onValueChange={setActiveTab}>
