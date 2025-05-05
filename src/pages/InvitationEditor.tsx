@@ -36,6 +36,16 @@ interface Guest {
   rsvp_status?: string;
 }
 
+interface Invitation {
+  id: string;
+  title: string;
+  description?: string;
+  reply_to_email?: string;
+  editor_data: any;
+  status: string;
+  user_id: string;
+}
+
 const InvitationEditor = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -44,7 +54,7 @@ const InvitationEditor = () => {
   const [activeObject, setActiveObject] = useState<fabric.Object | null>(null);
   const [invitationTitle, setInvitationTitle] = useState("Untitled Invitation");
   const [description, setDescription] = useState("");
-  const [replyToEmail, setReplyToEmail] = useState(""); // New state for reply-to email
+  const [replyToEmail, setReplyToEmail] = useState(""); // State for reply-to email
   const [isSaving, setIsSaving] = useState(false);
   const [activeTab, setActiveTab] = useState("design");
   const { toast } = useToast();
@@ -661,7 +671,7 @@ const InvitationEditor = () => {
                     />
                   </div>
                   
-                  {/* New reply-to email field */}
+                  {/* Reply-to email field */}
                   <div>
                     <Label htmlFor="replyToEmail" className="flex items-center gap-2">
                       <Mail className="h-4 w-4" /> Reply-To Email Address

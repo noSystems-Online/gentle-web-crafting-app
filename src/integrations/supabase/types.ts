@@ -60,6 +60,7 @@ export type Database = {
           description: string | null
           editor_data: Json
           id: string
+          reply_to_email: string | null
           rsvp_enabled: boolean
           sent_at: string | null
           status: string
@@ -74,6 +75,7 @@ export type Database = {
           description?: string | null
           editor_data?: Json
           id?: string
+          reply_to_email?: string | null
           rsvp_enabled?: boolean
           sent_at?: string | null
           status?: string
@@ -88,6 +90,7 @@ export type Database = {
           description?: string | null
           editor_data?: Json
           id?: string
+          reply_to_email?: string | null
           rsvp_enabled?: boolean
           sent_at?: string | null
           status?: string
