@@ -62,6 +62,7 @@ export type Database = {
           id: string
           reply_to_email: string | null
           rsvp_enabled: boolean
+          sender_name: string | null
           sent_at: string | null
           status: string
           template_id: string | null
@@ -77,6 +78,7 @@ export type Database = {
           id?: string
           reply_to_email?: string | null
           rsvp_enabled?: boolean
+          sender_name?: string | null
           sent_at?: string | null
           status?: string
           template_id?: string | null
@@ -92,6 +94,7 @@ export type Database = {
           id?: string
           reply_to_email?: string | null
           rsvp_enabled?: boolean
+          sender_name?: string | null
           sent_at?: string | null
           status?: string
           template_id?: string | null
