@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { fabric } from 'fabric';
@@ -55,13 +56,17 @@ const InvitationEditor = () => {
   const [activeObject, setActiveObject] = useState<fabric.Object | null>(null);
   const [invitationTitle, setInvitationTitle] = useState("Untitled Invitation");
   const [description, setDescription] = useState("");
-  const [replyToEmail, setReplyToEmail] = useState(""); // State for reply-to email
-  const [senderName, setSenderName] = useState(""); // State for sender name
+  const [replyToEmail, setReplyToEmail] = useState(""); 
+  const [senderName, setSenderName] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [activeTab, setActiveTab] = useState("design");
   const { toast } = useToast();
   const { user } = useAuth();
   const { canAccessPremiumTemplate, getGuestLimit } = useFeatureAccess();
+  
+  // Generate a temporary ID for new invitations
+  const [temporaryId, setTemporaryId] = useState<string | null>(null);
+  const effectiveId = id || temporaryId;
   
   // Get current guest count to determine if user can add more
   const [guestCount, setGuestCount] = useState(0);
@@ -72,6 +77,13 @@ const InvitationEditor = () => {
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [showDownloadProgress, setShowDownloadProgress] = useState(false);
   const [downloadComplete, setDownloadComplete] = useState(false);
+  
+  // Generate a temporary ID for new invitations
+  useEffect(() => {
+    if (!id) {
+      setTemporaryId(crypto.randomUUID());
+    }
+  }, [id]);
   
   // Initialize canvas
   useEffect(() => {
@@ -104,21 +116,21 @@ const InvitationEditor = () => {
 
   // Fetch guest count when invitation ID is available
   useEffect(() => {
-    if (id && user) {
+    if (effectiveId && user) {
       fetchGuestCount();
       fetchGuests();
     }
-  }, [id, user]);
+  }, [effectiveId, user]);
   
   // Fetch the current guest count
   const fetchGuestCount = async () => {
-    if (!id) return;
+    if (!effectiveId) return;
     
     try {
       const { data, error, count } = await supabase
         .from('guests')
         .select('*', { count: 'exact' })
-        .eq('invitation_id', id);
+        .eq('invitation_id', effectiveId);
         
       if (error) throw error;
       
@@ -130,13 +142,13 @@ const InvitationEditor = () => {
 
   // Fetch the guests data
   const fetchGuests = async () => {
-    if (!id) return;
+    if (!effectiveId) return;
     
     try {
       const { data, error } = await supabase
         .from('guests')
         .select('*')
-        .eq('invitation_id', id);
+        .eq('invitation_id', effectiveId);
         
       if (error) throw error;
       
@@ -289,8 +301,8 @@ const InvitationEditor = () => {
       const invitationData = {
         title: invitationTitle,
         description: description,
-        reply_to_email: replyToEmail, // Save the reply-to email
-        sender_name: senderName, // Save the sender name
+        reply_to_email: replyToEmail,
+        sender_name: senderName,
         editor_data: canvasData,
         user_id: user.id,
         status: 'draft',
@@ -305,10 +317,18 @@ const InvitationEditor = () => {
           .update(invitationData)
           .eq('id', id);
       } else {
-        // Create new invitation
+        // For new invitations, use the temporary ID
         result = await supabase
           .from('invitations')
-          .insert(invitationData);
+          .insert({
+            ...invitationData,
+            id: temporaryId
+          });
+          
+        // If successful, update the URL to include the saved ID
+        if (!result.error && temporaryId) {
+          navigate(`/invitation/edit/${temporaryId}`, { replace: true });
+        }
       }
 
       if (result.error) throw result.error;
@@ -728,7 +748,7 @@ const InvitationEditor = () => {
                     </TabsContent>
                     <TabsContent value="guests" className="mt-4">
                       <GuestList 
-                        invitationId={id} 
+                        invitationId={effectiveId} 
                         canAddMore={canAddMoreGuests()}
                         fabricCanvas={fabricCanvas}
                       />
