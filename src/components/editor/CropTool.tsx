@@ -172,7 +172,12 @@ const CropTool: React.FC<CropToolProps> = ({
       });
       
       setIsDialogOpen(false);
-      onCropComplete();
+      
+      // IMPORTANT: Delay the onCropComplete callback to ensure the canvas state is properly
+      // saved before any other tools are activated or the page is refreshed
+      setTimeout(() => {
+        onCropComplete();
+      }, 100);
     } catch (error) {
       console.error("Error cropping canvas:", error);
       toast({
