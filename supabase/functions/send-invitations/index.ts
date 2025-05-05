@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -99,8 +100,9 @@ serve(async (req) => {
       });
     }
 
-    // Get the reply-to email address from the invitation
+    // Get the reply-to email address and sender name from the invitation
     const replyToEmail = invitation.reply_to_email || null;
+    const senderName = invitation.sender_name || "Invitation Service";
 
     // Check if SMTP is configured - we now check if the SMTP host is set rather than username/password
     // This makes SMTP the priority if it's configured
@@ -169,7 +171,7 @@ serve(async (req) => {
               smtp: smtpConfig,
               email: {
                 fromEmail: smtpConfig.username,
-                fromName: "Invitation Service",
+                fromName: senderName, // Use the sender name from invitation
                 replyTo: replyToEmail, // Add the reply-to email address if available
                 to: [guest.email],
                 subject: `${invitationTitle} - You're Invited!`,
@@ -222,6 +224,7 @@ serve(async (req) => {
               template_params: {
                 to_email: guest.email,
                 to_name: guest.name,
+                from_name: senderName, // Add sender name for EmailJS template
                 invitation_title: invitationTitle,
                 rsvp_link: `${publicAppUrl}/rsvp/${guest.id}`,
                 message: `Please join us! View your invitation and RSVP here: ${publicAppUrl}/rsvp/${guest.id}`,

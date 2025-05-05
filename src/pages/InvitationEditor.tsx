@@ -15,7 +15,7 @@ import TextControls from '@/components/editor/TextControls';
 import TemplateSelector from '@/components/editor/TemplateSelector';
 import GuestList from '@/components/editor/GuestList';
 import CropTool from '@/components/editor/CropTool';
-import { AlertCircle, Download, Mail } from 'lucide-react';
+import { AlertCircle, Download, Mail, User } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -41,6 +41,7 @@ interface Invitation {
   title: string;
   description?: string;
   reply_to_email?: string;
+  sender_name?: string;
   editor_data: any;
   status: string;
   user_id: string;
@@ -55,6 +56,7 @@ const InvitationEditor = () => {
   const [invitationTitle, setInvitationTitle] = useState("Untitled Invitation");
   const [description, setDescription] = useState("");
   const [replyToEmail, setReplyToEmail] = useState(""); // State for reply-to email
+  const [senderName, setSenderName] = useState(""); // State for sender name
   const [isSaving, setIsSaving] = useState(false);
   const [activeTab, setActiveTab] = useState("design");
   const { toast } = useToast();
@@ -246,6 +248,7 @@ const InvitationEditor = () => {
         setInvitationTitle(data.title);
         setDescription(data.description || '');
         setReplyToEmail(data.reply_to_email || ''); // Load reply-to email
+        setSenderName(data.sender_name || ''); // Load sender name
         
         if (data.editor_data && fabricCanvas) {
           try {
@@ -287,6 +290,7 @@ const InvitationEditor = () => {
         title: invitationTitle,
         description: description,
         reply_to_email: replyToEmail, // Save the reply-to email
+        sender_name: senderName, // Save the sender name
         editor_data: canvasData,
         user_id: user.id,
         status: 'draft',
@@ -669,6 +673,23 @@ const InvitationEditor = () => {
                       placeholder="Enter a description"
                       className="min-h-20"
                     />
+                  </div>
+                  
+                  {/* Sender name field */}
+                  <div>
+                    <Label htmlFor="senderName" className="flex items-center gap-2">
+                      <User className="h-4 w-4" /> Sender Name
+                    </Label>
+                    <Input
+                      id="senderName"
+                      value={senderName}
+                      onChange={(e) => setSenderName(e.target.value)}
+                      placeholder="Your Name or Organization"
+                      className="mt-1"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Will appear as the sender name in invitation emails.
+                    </p>
                   </div>
                   
                   {/* Reply-to email field */}
