@@ -259,8 +259,8 @@ const InvitationEditor = () => {
       if (data) {
         setInvitationTitle(data.title);
         setDescription(data.description || '');
-        setReplyToEmail(data.reply_to_email || ''); 
-        setSenderName(data.sender_name || ''); 
+        setReplyToEmail(data.reply_to_email || ''); // Load reply-to email
+        setSenderName(data.sender_name || ''); // Load sender name
         
         if (data.editor_data && fabricCanvas) {
           try {
@@ -635,9 +635,7 @@ const InvitationEditor = () => {
   // Handle crop complete
   const handleCropComplete = () => {
     setIsCropping(false);
-    
-    // Important: Save the invitation immediately after cropping is complete
-    // to ensure the new dimensions and background color are saved to the database
+    // Save the current state after cropping
     saveInvitation();
   };
   

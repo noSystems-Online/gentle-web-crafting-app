@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useToast } from '@/hooks/use-toast';
 
 interface CropToolProps {
@@ -27,7 +28,6 @@ const CropTool: React.FC<CropToolProps> = ({
   const [cropRect, setCropRect] = useState<fabric.Rect | null>(null);
   const [originalObjects, setOriginalObjects] = useState<fabric.Object[]>([]);
   const [originalDimensions, setOriginalDimensions] = useState({ width: 0, height: 0 });
-  const [originalBackgroundColor, setOriginalBackgroundColor] = useState<string | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const { toast } = useToast();
 
@@ -35,11 +35,10 @@ const CropTool: React.FC<CropToolProps> = ({
   useEffect(() => {
     if (!fabricCanvas) return;
 
-    // Store original canvas dimensions, background color, and objects
+    // Store original canvas dimensions and objects
     const canvasWidth = fabricCanvas.getWidth();
     const canvasHeight = fabricCanvas.getHeight();
     setOriginalDimensions({ width: canvasWidth, height: canvasHeight });
-    setOriginalBackgroundColor(fabricCanvas.backgroundColor as string || '#ffffff');
     
     // Clone all objects to restore them if needed
     const clonedObjects: fabric.Object[] = [];
@@ -133,9 +132,6 @@ const CropTool: React.FC<CropToolProps> = ({
       // Remove the crop rectangle
       fabricCanvas.remove(cropRect);
       
-      // Store the current background color before cropping
-      const backgroundColor = fabricCanvas.backgroundColor || '#ffffff';
-      
       // Adjust all objects' positions relative to the crop rectangle
       fabricCanvas.getObjects().forEach(obj => {
         obj.left = (obj.left || 0) - cropLeft;
@@ -151,10 +147,6 @@ const CropTool: React.FC<CropToolProps> = ({
       
       // Update the canvas viewport
       fabricCanvas.setViewportTransform([1, 0, 0, 1, -cropLeft, -cropTop]);
-      
-      // Explicitly set the background color again to ensure it's preserved
-      fabricCanvas.backgroundColor = backgroundColor;
-      
       fabricCanvas.renderAll();
       
       // Reset the viewport to account for the new dimensions
@@ -172,12 +164,7 @@ const CropTool: React.FC<CropToolProps> = ({
       });
       
       setIsDialogOpen(false);
-      
-      // IMPORTANT: Delay the onCropComplete callback to ensure the canvas state is properly
-      // saved before any other tools are activated or the page is refreshed
-      setTimeout(() => {
-        onCropComplete();
-      }, 100);
+      onCropComplete();
     } catch (error) {
       console.error("Error cropping canvas:", error);
       toast({
