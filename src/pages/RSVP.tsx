@@ -64,8 +64,14 @@ const RSVP = () => {
           return;
         }
 
-        setGuest(guestData);
-        setStatus(guestData.rsvp_status);
+        // Cast the rsvp_status to our RSVPStatus type since we know it's one of our valid values
+        const guestWithTypedStatus: Guest = {
+          ...guestData,
+          rsvp_status: guestData.rsvp_status as RSVPStatus
+        };
+
+        setGuest(guestWithTypedStatus);
+        setStatus(guestWithTypedStatus.rsvp_status);
         setMessage(guestData.rsvp_message || '');
 
         // Fetch invitation data
