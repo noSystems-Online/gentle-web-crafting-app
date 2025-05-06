@@ -33,6 +33,7 @@ interface SendInvitationRequest {
   invitationId: string;
   invitationTitle: string;
   userId: string;
+  imageDataUrl?: string; // Base64 data URL of invitation image
 }
 
 // Email relay service endpoint
@@ -46,7 +47,7 @@ serve(async (req) => {
 
   try {
     // Get request data
-    const { invitationId, invitationTitle, userId } = await req.json() as SendInvitationRequest;
+    const { invitationId, invitationTitle, userId, imageDataUrl } = await req.json() as SendInvitationRequest;
     
     // Create Supabase client with auth context from request
     const authHeader = req.headers.get('Authorization');
@@ -143,6 +144,21 @@ serve(async (req) => {
     // Get the base URL for RSVP links
     const publicAppUrl = Deno.env.get("PUBLIC_APP_URL") || "https://invitecanvas.app"; // Fallback to production URL
 
+    // Save the invitation image to the invitation record for later use on the RSVP page
+    if (imageDataUrl) {
+      const { error: updateError } = await supabase
+        .from('invitations')
+        .update({ 
+          custom_design_url: imageDataUrl
+        })
+        .eq('id', invitationId);
+        
+      if (updateError) {
+        console.error("Error saving invitation image:", updateError);
+        // Continue anyway since this is not critical
+      }
+    }
+
     // Send emails to each guest
     const results = [];
     for (const guest of guests) {
@@ -159,7 +175,7 @@ serve(async (req) => {
 
       try {
         // Generate HTML content for this guest
-        const htmlContent = generatePersonalizedHtml(guest, invitationTitle, publicAppUrl);
+        const htmlContent = generatePersonalizedHtml(guest, invitationTitle, publicAppUrl, imageDataUrl);
 
         let emailSent = false;
         
@@ -228,7 +244,8 @@ serve(async (req) => {
                 invitation_title: invitationTitle,
                 rsvp_link: `${publicAppUrl}/rsvp/${guest.id}`,
                 message: `Please join us! View your invitation and RSVP here: ${publicAppUrl}/rsvp/${guest.id}`,
-                reply_to: replyToEmail || "" // Add reply-to for EmailJS template
+                reply_to: replyToEmail || "", // Add reply-to for EmailJS template
+                invitation_image: imageDataUrl || "" // Add the invitation image for EmailJS template
               }
             };
             
@@ -318,7 +335,13 @@ serve(async (req) => {
 });
 
 // Function to generate HTML for a personalized invitation
-function generatePersonalizedHtml(guest: Guest, invitationTitle: string, baseUrl: string): string {
+function generatePersonalizedHtml(guest: Guest, invitationTitle: string, baseUrl: string, imageDataUrl?: string): string {
+  const imageSection = imageDataUrl ? `
+    <div style="text-align: center; margin: 20px 0;">
+      <img src="${imageDataUrl}" alt="Invitation" style="max-width: 100%; border-radius: 8px; border: 1px solid #e2e8f0; max-height: 400px;" />
+    </div>
+  ` : '';
+  
   return `
   <!DOCTYPE html>
   <html>
@@ -338,6 +361,9 @@ function generatePersonalizedHtml(guest: Guest, invitationTitle: string, baseUrl
     <h1>${invitationTitle}</h1>
     <div class="invitation">
       <p>Dear ${guest.name},</p>
+      
+      ${imageSection}
+      
       <p>You've been invited! Please click the button below to view your personal invitation and RSVP.</p>
       <p style="text-align: center;">
         <a href="${baseUrl}/rsvp/${guest.id}" class="button">View Invitation & RSVP</a>

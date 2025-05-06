@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { Loader2, AlertCircle } from "lucide-react";
+import { Loader2, AlertCircle, Check } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 
 type RSVPStatus = 'attending' | 'declined' | 'maybe' | 'sent' | null;
@@ -29,6 +29,9 @@ interface Invitation {
   template_id: string | null;
   editor_data: any;
   rsvp_enabled: boolean;
+  custom_design_url?: string | null;
+  reply_to_email?: string | null;
+  sender_name?: string | null;
 }
 
 const RSVP = () => {
@@ -40,6 +43,7 @@ const RSVP = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [submitSuccess, setSubmitSuccess] = useState<boolean>(false);
 
   useEffect(() => {
     const fetchGuestAndInvitation = async () => {
@@ -106,6 +110,39 @@ const RSVP = () => {
     fetchGuestAndInvitation();
   }, [guestId]);
 
+  const sendNotificationEmail = async (newStatus: RSVPStatus) => {
+    if (!guest || !invitation || !invitation.reply_to_email) return;
+    
+    try {
+      // We'll use the existing send-invitations edge function to send a notification email
+      const response = await fetch('/api/v1/notify-rsvp-update', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          guestId: guest.id,
+          guestName: guest.name,
+          guestEmail: guest.email,
+          invitationId: invitation.id,
+          invitationTitle: invitation.title,
+          rsvpStatus: newStatus,
+          rsvpMessage: message,
+          replyToEmail: invitation.reply_to_email,
+          senderName: invitation.sender_name || 'InviteCanvas'
+        }),
+      });
+      
+      if (!response.ok) {
+        console.error("Failed to send notification email");
+      }
+    } catch (err) {
+      console.error("Error sending notification email:", err);
+      // Don't throw here, as we still want to update the RSVP status
+      // even if the notification email fails
+    }
+  };
+
   const handleSubmit = async () => {
     if (!guest || !status) return;
     
@@ -128,6 +165,12 @@ const RSVP = () => {
           variant: "destructive"
         });
       } else {
+        // Send notification email
+        await sendNotificationEmail(status);
+        
+        // Show success message
+        setSubmitSuccess(true);
+        
         toast({
           title: "RSVP Updated",
           description: "Thank you for responding to the invitation!",
@@ -206,6 +249,43 @@ const RSVP = () => {
     );
   }
 
+  if (submitSuccess) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <div className="mx-auto bg-green-100 p-3 rounded-full mb-4">
+              <Check className="h-8 w-8 text-green-600" />
+            </div>
+            <CardTitle className="text-center">Thank You!</CardTitle>
+            <CardDescription className="text-center">
+              Your RSVP has been successfully submitted
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="text-center">
+            <p className="mb-4">
+              {status === 'attending' 
+                ? "We're looking forward to seeing you!" 
+                : status === 'maybe' 
+                  ? "We hope you can make it!" 
+                  : "We're sorry you can't make it, but thank you for letting us know."}
+            </p>
+            {message && (
+              <div className="bg-gray-50 p-4 rounded-md text-left italic">
+                "{message}"
+              </div>
+            )}
+          </CardContent>
+          <CardFooter className="flex justify-center">
+            <Button asChild>
+              <Link to="/">Return to Home</Link>
+            </Button>
+          </CardFooter>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 p-4">
       <Card className="w-full max-w-md">
@@ -216,6 +296,17 @@ const RSVP = () => {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Display the invitation image if available */}
+          {invitation?.custom_design_url && (
+            <div className="mb-4">
+              <img 
+                src={invitation.custom_design_url} 
+                alt="Invitation" 
+                className="w-full h-auto rounded-md border border-gray-200 shadow-sm"
+              />
+            </div>
+          )}
+          
           <div className="space-y-2">
             <h3 className="text-sm font-medium">Will you attend?</h3>
             <RadioGroup 
