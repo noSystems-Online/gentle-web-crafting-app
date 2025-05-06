@@ -22,6 +22,7 @@ import Success from "./pages/Success";
 import NotFound from "./pages/NotFound";
 import Projects from "./pages/Projects";
 import InvitationEditor from "./pages/InvitationEditor";
+import RSVP from "./pages/RSVP";
 
 const queryClient = new QueryClient();
 
@@ -53,6 +54,9 @@ const App = () => (
                 } 
               />
               <Route path="/pricing" element={<Pricing />} />
+              
+              {/* RSVP route - public */}
+              <Route path="/rsvp/:guestId" element={<RSVP />} />
               
               {/* Protected routes */}
               <Route 
