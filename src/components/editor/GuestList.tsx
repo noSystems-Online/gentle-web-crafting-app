@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, SUPABASE_URL } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { AlertCircle, Plus, Send, Trash2, X, User, Mail, Check } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/context/AuthContext";
 import {
   Dialog,
   DialogContent,
@@ -46,9 +47,7 @@ const GuestList: React.FC<GuestListProps> = ({ invitationId, canAddMore, fabricC
   const [guestToDelete, setGuestToDelete] = useState<string | null>(null);
   const { toast } = useToast();
   const [isSending, setIsSending] = useState(false);
-
-  // Define the Supabase URL constant using the URL from the client configuration
-  const SUPABASE_URL = "https://ftcjcvyyecypjvjhrqxq.supabase.co";
+  const { user } = useAuth();
 
   useEffect(() => {
     if (invitationId) {
@@ -161,7 +160,7 @@ const GuestList: React.FC<GuestListProps> = ({ invitationId, canAddMore, fabricC
 
   // When invitations are sent, we need to send the canvas image as well
   const sendInvitations = async () => {
-    if (!fabricCanvas || !invitationId) {
+    if (!fabricCanvas || !invitationId || !user) {
       toast({
         title: "Error",
         description: "Missing required data to send invitations.",
@@ -200,6 +199,8 @@ const GuestList: React.FC<GuestListProps> = ({ invitationId, canAddMore, fabricC
         },
         body: JSON.stringify({
           invitationId: invitationId,
+          invitationTitle: "Your Invitation", // This should ideally be passed as a prop from the parent
+          userId: user.id, // Explicitly include the user ID for permission check
           imageDataUrl: imageDataUrl
         }),
       });

@@ -691,7 +691,7 @@ const InvitationEditor = () => {
         body: JSON.stringify({
           invitationId: effectiveId,
           invitationTitle: invitationTitle,
-          userId: user.id,
+          userId: user.id, // Explicitly include the user ID for permission check
           imageDataUrl: imageDataUrl
         }),
       });
