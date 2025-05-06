@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -48,16 +49,6 @@ serve(async (req) => {
     // Get request data
     const { invitationId, invitationTitle, userId, imageDataUrl } = await req.json() as SendInvitationRequest;
     
-    if (!invitationId || !userId) {
-      return new Response(JSON.stringify({ 
-        success: false, 
-        error: "Missing required parameters - need invitationId and userId" 
-      }), { 
-        status: 400, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      });
-    }
-
     // Create Supabase client with auth context from request
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
@@ -99,10 +90,6 @@ serve(async (req) => {
       });
     }
 
-    console.log("Invitation:", invitation);
-    console.log("Request userId:", userId);
-    console.log("Invitation user_id:", invitation.user_id);
-
     // Verify the user has access to this invitation
     if (invitation.user_id !== userId) {
       return new Response(JSON.stringify({
@@ -117,7 +104,6 @@ serve(async (req) => {
     // Get the reply-to email address and sender name from the invitation
     const replyToEmail = invitation.reply_to_email || null;
     const senderName = invitation.sender_name || "Invitation Service";
-    const actualTitle = invitationTitle || invitation.title || "Your Invitation";
 
     // Check if SMTP is configured - we now check if the SMTP host is set rather than username/password
     // This makes SMTP the priority if it's configured
@@ -204,7 +190,7 @@ serve(async (req) => {
                 fromName: senderName, // Use the sender name from invitation
                 replyTo: replyToEmail, // Add the reply-to email address if available
                 to: [guest.email],
-                subject: `${actualTitle} - You're Invited!`,
+                subject: `${invitationTitle} - You're Invited!`,
                 text: `Dear ${guest.name}, you've been invited! Please check your email client to view this invitation properly.`,
                 html: htmlContent
               }

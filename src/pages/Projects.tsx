@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -60,13 +59,11 @@ const Projects: React.FC = () => {
   const fetchInvitations = async () => {
     setIsLoading(true);
     try {
-      // Fetch with a limit to avoid potential large JSON issues
       const { data, error } = await supabase
         .from('invitations')
-        .select('id, title, created_at, status')
+        .select('*')
         .eq('user_id', user?.id)
-        .order('created_at', { ascending: false })
-        .limit(100); // Add a reasonable limit
+        .order('created_at', { ascending: false });
 
       if (error) throw error;
       

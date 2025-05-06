@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect } from "react";
-import { supabase, SUPABASE_URL } from "@/integrations/supabase/client";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -10,7 +9,6 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { AlertCircle, Plus, Send, Trash2, X, User, Mail, Check } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/context/AuthContext";
 import {
   Dialog,
   DialogContent,
@@ -47,7 +45,6 @@ const GuestList: React.FC<GuestListProps> = ({ invitationId, canAddMore, fabricC
   const [guestToDelete, setGuestToDelete] = useState<string | null>(null);
   const { toast } = useToast();
   const [isSending, setIsSending] = useState(false);
-  const { user } = useAuth();
 
   useEffect(() => {
     if (invitationId) {
@@ -160,7 +157,7 @@ const GuestList: React.FC<GuestListProps> = ({ invitationId, canAddMore, fabricC
 
   // When invitations are sent, we need to send the canvas image as well
   const sendInvitations = async () => {
-    if (!fabricCanvas || !invitationId || !user) {
+    if (!fabricCanvas || !invitationId) {
       toast({
         title: "Error",
         description: "Missing required data to send invitations.",
@@ -178,39 +175,16 @@ const GuestList: React.FC<GuestListProps> = ({ invitationId, canAddMore, fabricC
         quality: 0.8,
       });
       
-      // Get the current session and authorization token
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData?.session?.access_token;
-      
-      if (!token) {
-        throw new Error("Authentication token not available");
-      }
-      
-      // Use the constant SUPABASE_URL instead of accessing the protected property
-      const functionUrl = `${SUPABASE_URL}/functions/v1/send-invitations`;
-      
-      console.log("Sending invitations to:", functionUrl);
-      
-      const response = await fetch(functionUrl, {
+      const response = await fetch("/api/v1/send-invitations", {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
           invitationId: invitationId,
-          invitationTitle: "Your Invitation", // This should ideally be passed as a prop from the parent
-          userId: user.id, // Explicitly include the user ID for permission check
-          imageDataUrl: imageDataUrl
+          imageDataUrl: imageDataUrl // Send the canvas image as a data URL
         }),
       });
-
-      // Check if the response is OK
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error("Error response from server:", errorText);
-        throw new Error(`Server error: ${response.status} ${response.statusText}`);
-      }
 
       const result = await response.json();
 

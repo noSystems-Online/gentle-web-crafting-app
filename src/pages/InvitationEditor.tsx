@@ -80,9 +80,6 @@ const InvitationEditor = () => {
   // When invitations are sent, we need to send the canvas image as well
   const [isSending, setIsSending] = useState(false);
   
-  // Define the Supabase URL constant using the URL from the client configuration
-  const SUPABASE_URL = "https://ftcjcvyyecypjvjhrqxq.supabase.co";
-  
   // Generate a temporary ID for new invitations
   useEffect(() => {
     if (!id) {
@@ -669,39 +666,19 @@ const InvitationEditor = () => {
         quality: 0.8,
       });
       
-      // Get the current session and authorization token
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData?.session?.access_token;
-      
-      if (!token) {
-        throw new Error("Authentication token not available");
-      }
-      
-      // Use the constant SUPABASE_URL instead of accessing the protected property
-      const functionUrl = `${SUPABASE_URL}/functions/v1/send-invitations`;
-      
-      console.log("Sending invitations to:", functionUrl);
-      
-      const response = await fetch(functionUrl, {
+      const response = await fetch("/api/v1/send-invitations", {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${await supabase.auth.getSession().then(res => res.data.session?.access_token)}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
           invitationId: effectiveId,
           invitationTitle: invitationTitle,
-          userId: user.id, // Explicitly include the user ID for permission check
-          imageDataUrl: imageDataUrl
+          userId: user.id,
+          imageDataUrl: imageDataUrl // Send the canvas image as a data URL
         }),
       });
-
-      // Check if the response is OK
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error("Error response from server:", errorText);
-        throw new Error(`Server error: ${response.status} ${response.statusText}`);
-      }
 
       const result = await response.json();
 
