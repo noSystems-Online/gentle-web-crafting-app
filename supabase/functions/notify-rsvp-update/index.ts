@@ -132,30 +132,47 @@ serve(async (req) => {
 
     console.log("Sending RSVP notification via SMTP to:", replyToEmail);
     
-    // Send email using relay service
-    const response = await fetch(EMAIL_RELAY_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(emailPayload)
-    });
+    try {
+      // Send email using relay service
+      const response = await fetch(EMAIL_RELAY_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(emailPayload)
+      });
 
-    const result = await response.json();
-    if (!result.success) {
-      console.error("SMTP sending failed with result:", result);
-      throw new Error(result.message || "SMTP sending failed");
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("SMTP relay service error:", errorText);
+        throw new Error(`SMTP relay service returned: ${response.status} ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      if (!result.success) {
+        console.error("SMTP sending failed with result:", result);
+        throw new Error(result.message || "SMTP sending failed");
+      }
+
+      console.log("RSVP notification sent successfully via SMTP to:", replyToEmail);
+
+      return new Response(JSON.stringify({
+        success: true,
+        message: "RSVP notification sent successfully"
+      }), { 
+        status: 200, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      });
+    } catch (error) {
+      console.error("Error sending email:", error);
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: `Email sending failed: ${error.message}` 
+      }), { 
+        status: 500, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      });
     }
-
-    console.log("RSVP notification sent successfully via SMTP to:", replyToEmail);
-
-    return new Response(JSON.stringify({
-      success: true,
-      message: "RSVP notification sent successfully"
-    }), { 
-      status: 200, 
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-    });
   } catch (error) {
     console.error("Error in notify-rsvp-update function:", error);
     return new Response(JSON.stringify({ 

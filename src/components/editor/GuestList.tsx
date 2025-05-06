@@ -175,16 +175,40 @@ const GuestList: React.FC<GuestListProps> = ({ invitationId, canAddMore, fabricC
         quality: 0.8,
       });
       
-      const response = await fetch("/api/v1/send-invitations", {
+      // Get the current session and authorization token
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      
+      if (!token) {
+        throw new Error("Authentication token not available");
+      }
+      
+      // Get the Supabase URL from the client configuration
+      const supabaseUrl = supabase.supabaseUrl;
+      
+      // Construct the full URL for the function
+      const functionUrl = `${supabaseUrl}/functions/v1/send-invitations`;
+      
+      console.log("Sending invitations to:", functionUrl);
+      
+      const response = await fetch(functionUrl, {
         method: "POST",
         headers: {
+          Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
           invitationId: invitationId,
-          imageDataUrl: imageDataUrl // Send the canvas image as a data URL
+          imageDataUrl: imageDataUrl
         }),
       });
+
+      // Check if the response is OK
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Error response from server:", errorText);
+        throw new Error(`Server error: ${response.status} ${response.statusText}`);
+      }
 
       const result = await response.json();
 
