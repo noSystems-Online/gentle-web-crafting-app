@@ -55,7 +55,7 @@ const App = () => (
               />
               <Route path="/pricing" element={<Pricing />} />
               
-              {/* RSVP route - public */}
+              {/* RSVP route - make sure this is a public route */}
               <Route path="/rsvp/:guestId" element={<RSVP />} />
               
               {/* Protected routes */}

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { Loader2 } from "lucide-react";
+import { Loader2, AlertCircle } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 
 type RSVPStatus = 'attending' | 'declined' | 'maybe' | 'sent' | null;
@@ -45,10 +45,13 @@ const RSVP = () => {
     const fetchGuestAndInvitation = async () => {
       try {
         if (!guestId) {
+          console.error("No guest ID provided in URL");
           setError("No guest ID provided");
           setLoading(false);
           return;
         }
+
+        console.log("Fetching guest with ID:", guestId);
 
         // Fetch guest data
         const { data: guestData, error: guestError } = await supabase
@@ -63,6 +66,8 @@ const RSVP = () => {
           setLoading(false);
           return;
         }
+
+        console.log("Found guest:", guestData);
 
         // Cast the rsvp_status to our RSVPStatus type since we know it's one of our valid values
         const guestWithTypedStatus: Guest = {
@@ -88,6 +93,7 @@ const RSVP = () => {
           return;
         }
 
+        console.log("Found invitation:", invitationData);
         setInvitation(invitationData);
         setLoading(false);
       } catch (err) {
@@ -152,7 +158,10 @@ const RSVP = () => {
       <div className="flex flex-col items-center justify-center min-h-screen p-4">
         <Card className="w-full max-w-md">
           <CardHeader>
-            <CardTitle className="text-center text-red-500">Oops!</CardTitle>
+            <CardTitle className="text-center text-red-500">
+              <AlertCircle className="h-8 w-8 mx-auto mb-2" />
+              Oops!
+            </CardTitle>
             <CardDescription className="text-center">
               {error}
             </CardDescription>
@@ -164,7 +173,7 @@ const RSVP = () => {
           </CardContent>
           <CardFooter className="flex justify-center">
             <Button asChild>
-              <a href="/">Return to Home</a>
+              <Link to="/">Return to Home</Link>
             </Button>
           </CardFooter>
         </Card>
@@ -189,7 +198,7 @@ const RSVP = () => {
           </CardContent>
           <CardFooter className="flex justify-center">
             <Button asChild>
-              <a href="/">Return to Home</a>
+              <Link to="/">Return to Home</Link>
             </Button>
           </CardFooter>
         </Card>
