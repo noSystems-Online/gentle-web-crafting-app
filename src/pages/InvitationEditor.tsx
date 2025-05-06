@@ -80,6 +80,9 @@ const InvitationEditor = () => {
   // When invitations are sent, we need to send the canvas image as well
   const [isSending, setIsSending] = useState(false);
   
+  // Define the Supabase URL constant using the URL from the client configuration
+  const SUPABASE_URL = "https://ftcjcvyyecypjvjhrqxq.supabase.co";
+  
   // Generate a temporary ID for new invitations
   useEffect(() => {
     if (!id) {
@@ -674,11 +677,8 @@ const InvitationEditor = () => {
         throw new Error("Authentication token not available");
       }
       
-      // Get the Supabase URL from the client configuration
-      const supabaseUrl = supabase.supabaseUrl;
-      
-      // Construct the full URL for the function
-      const functionUrl = `${supabaseUrl}/functions/v1/send-invitations`;
+      // Use the constant SUPABASE_URL instead of accessing the protected property
+      const functionUrl = `${SUPABASE_URL}/functions/v1/send-invitations`;
       
       console.log("Sending invitations to:", functionUrl);
       

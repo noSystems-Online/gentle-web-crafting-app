@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -45,6 +46,9 @@ const GuestList: React.FC<GuestListProps> = ({ invitationId, canAddMore, fabricC
   const [guestToDelete, setGuestToDelete] = useState<string | null>(null);
   const { toast } = useToast();
   const [isSending, setIsSending] = useState(false);
+
+  // Define the Supabase URL constant using the URL from the client configuration
+  const SUPABASE_URL = "https://ftcjcvyyecypjvjhrqxq.supabase.co";
 
   useEffect(() => {
     if (invitationId) {
@@ -183,11 +187,8 @@ const GuestList: React.FC<GuestListProps> = ({ invitationId, canAddMore, fabricC
         throw new Error("Authentication token not available");
       }
       
-      // Get the Supabase URL from the client configuration
-      const supabaseUrl = supabase.supabaseUrl;
-      
-      // Construct the full URL for the function
-      const functionUrl = `${supabaseUrl}/functions/v1/send-invitations`;
+      // Use the constant SUPABASE_URL instead of accessing the protected property
+      const functionUrl = `${SUPABASE_URL}/functions/v1/send-invitations`;
       
       console.log("Sending invitations to:", functionUrl);
       
