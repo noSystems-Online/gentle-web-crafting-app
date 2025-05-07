@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { fabric } from 'fabric';
@@ -16,7 +15,7 @@ import TextControls from '@/components/editor/TextControls';
 import TemplateSelector from '@/components/editor/TemplateSelector';
 import GuestList from '@/components/editor/GuestList';
 import CropTool from '@/components/editor/CropTool';
-import { AlertCircle, Download, Mail, User } from 'lucide-react';
+import { AlertCircle, Download, Mail, User, Loader2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -28,6 +27,7 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import { FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 
 interface Guest {
@@ -84,6 +84,9 @@ const InvitationEditor = () => {
   // Debug flag to track the loading process
   const [isLoaded, setIsLoaded] = useState(false);
   
+  // Add a new loading state specifically for the canvas loading process
+  const [isCanvasLoading, setIsCanvasLoading] = useState(true);
+  
   // Generate a temporary ID for new invitations
   useEffect(() => {
     if (!id) {
@@ -120,6 +123,7 @@ const InvitationEditor = () => {
   useEffect(() => {
     if (id && fabricCanvas) {
       console.log("Loading invitation with ID:", id);
+      setIsCanvasLoading(true); // Start loading when we're about to fetch data
       loadInvitation(id);
     }
   }, [id, fabricCanvas]);
@@ -258,6 +262,8 @@ const InvitationEditor = () => {
   // Load invitation from database
   const loadInvitation = async (invitationId: string) => {
     console.log("Loading invitation data for ID:", invitationId);
+    setIsCanvasLoading(true); // Ensure loading state is true when we start
+    
     try {
       const { data, error } = await supabase
         .from('invitations')
@@ -285,18 +291,23 @@ const InvitationEditor = () => {
               console.log("Canvas data loaded successfully");
               fabricCanvas.renderAll();
               setIsLoaded(true);
+              setIsCanvasLoading(false); // Stop loading when canvas is ready
             });
           } catch (e) {
             console.error("Error loading canvas data:", e);
+            setIsCanvasLoading(false); // Stop loading on error too
           }
         } else {
           console.log("No editor data or canvas not ready");
+          setIsCanvasLoading(false); // No data to load
         }
       } else {
         console.log("No invitation data found");
+        setIsCanvasLoading(false); // No data found
       }
     } catch (error) {
       console.error("Error loading invitation:", error);
+      setIsCanvasLoading(false); // Stop loading on any error
       toast({
         title: "Failed to load invitation",
         description: "There was an error loading your invitation.",
@@ -881,6 +892,14 @@ const InvitationEditor = () => {
                 
                 <div className="border rounded-md overflow-hidden mt-4">
                   <div className="bg-gray-50 relative">
+                    {/* Loading overlay */}
+                    {isCanvasLoading && (
+                      <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center z-10">
+                        <Loader2 className="h-10 w-10 text-primary animate-spin mb-3" />
+                        <p className="text-muted-foreground">Loading your invitation...</p>
+                      </div>
+                    )}
+                    
                     <canvas ref={canvasRef} className="mx-auto" />
                     
                     {!user && (
