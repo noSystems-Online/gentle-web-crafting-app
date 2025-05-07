@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import DashboardLayout from '@/layouts/DashboardLayout';
 import { useFeatureAccess } from '@/hooks/use-feature-access';
-import { Plus, Folder, AlertCircle, Mail } from 'lucide-react';
+import { Plus, Folder, AlertCircle, Mail, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -59,11 +60,13 @@ const Projects: React.FC = () => {
   const fetchInvitations = async () => {
     setIsLoading(true);
     try {
+      // Fetch with pagination and simple ordering to avoid large JSON responses
       const { data, error } = await supabase
         .from('invitations')
-        .select('*')
+        .select('id, title, created_at, status') // Only select needed fields
         .eq('user_id', user?.id)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(20); // Limit to a reasonable number of records
 
       if (error) throw error;
       
@@ -140,7 +143,7 @@ const Projects: React.FC = () => {
               Create and manage your digital invitations
             </p>
           </div>
-          <Button onClick={handleCreateInvitation}>
+          <Button onClick={() => navigate('/invitation/new')}>
             <Plus className="mr-2 h-4 w-4" />
             New Invitation
           </Button>
@@ -148,7 +151,7 @@ const Projects: React.FC = () => {
         
         {isLoading ? (
           <div className="text-center py-8">
-            <div className="animate-spin h-6 w-6 border-2 border-primary border-t-transparent rounded-full mx-auto mb-2"></div>
+            <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
             <p className="text-muted-foreground">Loading your invitations...</p>
           </div>
         ) : (
@@ -191,7 +194,7 @@ const Projects: React.FC = () => {
                   <p className="mt-2 text-muted-foreground">
                     Create your first digital invitation to get started
                   </p>
-                  <Button className="mt-4" onClick={handleCreateInvitation}>
+                  <Button className="mt-4" onClick={() => navigate('/invitation/new')}>
                     <Plus className="mr-2 h-4 w-4" />
                     New Invitation
                   </Button>
@@ -312,6 +315,56 @@ const Projects: React.FC = () => {
       </div>
     </DashboardLayout>
   );
+  
+  function getStatusBadgeClass(status: string) {
+    switch (status) {
+      case 'draft':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'sent':
+        return 'bg-green-100 text-green-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  }
+  
+  function handleCreateProject() {
+    if (!newProjectName.trim()) {
+      toast({
+        title: "Project name required",
+        description: "Please enter a name for your project.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!canCreateProject) {
+      toast({
+        title: "Project limit reached",
+        description: "You've reached the maximum number of projects for your plan. Please upgrade to create more.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const newProject = {
+      id: Date.now().toString(),
+      name: newProjectName,
+      createdAt: new Date().toISOString().split('T')[0]
+    };
+
+    setProjects([...projects, newProject]);
+    setNewProjectName('');
+    setDialogOpen(false);
+    
+    toast({
+      title: "Project created",
+      description: `Successfully created project "${newProjectName}"`,
+    });
+  }
+  
+  function handleCreateInvitation() {
+    navigate('/invitation/new');
+  }
 };
 
 export default Projects;
