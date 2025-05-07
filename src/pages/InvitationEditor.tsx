@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { fabric } from 'fabric';
@@ -79,6 +80,9 @@ const InvitationEditor = () => {
   
   // When invitations are sent, we need to send the canvas image as well
   const [isSending, setIsSending] = useState(false);
+
+  // Debug flag to track the loading process
+  const [isLoaded, setIsLoaded] = useState(false);
   
   // Generate a temporary ID for new invitations
   useEffect(() => {
@@ -106,15 +110,19 @@ const InvitationEditor = () => {
 
     setFabricCanvas(canvas);
 
-    // Load invitation if ID provided
-    if (id) {
-      loadInvitation(id);
-    }
-
+    // We set canvas first before loading invitation
     return () => {
       canvas.dispose();
     };
-  }, [id]);
+  }, []);
+
+  // Separate useEffect for loading the invitation after canvas is initialized
+  useEffect(() => {
+    if (id && fabricCanvas) {
+      console.log("Loading invitation with ID:", id);
+      loadInvitation(id);
+    }
+  }, [id, fabricCanvas]);
 
   // Fetch guest count when invitation ID is available
   useEffect(() => {
@@ -249,6 +257,7 @@ const InvitationEditor = () => {
 
   // Load invitation from database
   const loadInvitation = async (invitationId: string) => {
+    console.log("Loading invitation data for ID:", invitationId);
     try {
       const { data, error } = await supabase
         .from('invitations')
@@ -256,21 +265,35 @@ const InvitationEditor = () => {
         .eq('id', invitationId)
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error("Supabase error:", error);
+        throw error;
+      }
+
+      console.log("Invitation data loaded:", data);
 
       if (data) {
         setInvitationTitle(data.title);
         setDescription(data.description || '');
-        setReplyToEmail(data.reply_to_email || ''); // Load reply-to email
-        setSenderName(data.sender_name || ''); // Load sender name
+        setReplyToEmail(data.reply_to_email || ''); 
+        setSenderName(data.sender_name || ''); 
         
         if (data.editor_data && fabricCanvas) {
           try {
-            fabricCanvas.loadFromJSON(data.editor_data, fabricCanvas.renderAll.bind(fabricCanvas));
+            console.log("Loading canvas data:", data.editor_data);
+            fabricCanvas.loadFromJSON(data.editor_data, () => {
+              console.log("Canvas data loaded successfully");
+              fabricCanvas.renderAll();
+              setIsLoaded(true);
+            });
           } catch (e) {
             console.error("Error loading canvas data:", e);
           }
+        } else {
+          console.log("No editor data or canvas not ready");
         }
+      } else {
+        console.log("No invitation data found");
       }
     } catch (error) {
       console.error("Error loading invitation:", error);
