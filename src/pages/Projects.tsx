@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -315,56 +314,6 @@ const Projects: React.FC = () => {
       </div>
     </DashboardLayout>
   );
-  
-  function getStatusBadgeClass(status: string) {
-    switch (status) {
-      case 'draft':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'sent':
-        return 'bg-green-100 text-green-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  }
-  
-  function handleCreateProject() {
-    if (!newProjectName.trim()) {
-      toast({
-        title: "Project name required",
-        description: "Please enter a name for your project.",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    if (!canCreateProject) {
-      toast({
-        title: "Project limit reached",
-        description: "You've reached the maximum number of projects for your plan. Please upgrade to create more.",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    const newProject = {
-      id: Date.now().toString(),
-      name: newProjectName,
-      createdAt: new Date().toISOString().split('T')[0]
-    };
-
-    setProjects([...projects, newProject]);
-    setNewProjectName('');
-    setDialogOpen(false);
-    
-    toast({
-      title: "Project created",
-      description: `Successfully created project "${newProjectName}"`,
-    });
-  }
-  
-  function handleCreateInvitation() {
-    navigate('/invitation/new');
-  }
 };
 
 export default Projects;
