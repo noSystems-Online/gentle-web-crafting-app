@@ -178,30 +178,25 @@ const GuestList: React.FC<GuestListProps> = ({ invitationId, canAddMore, fabricC
         quality: 0.8,
       });
       
-      const response = await fetch("/api/v1/send-invitations", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${await supabase.auth.getSession().then(res => res.data.session?.access_token)}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
+      // Call the Supabase Edge Function directly
+      const { data, error } = await supabase.functions.invoke('send-invitations', {
+        body: {
           invitationId: invitationId,
           imageDataUrl: imageDataUrl // Send the canvas image as a data URL
-        }),
+        }
       });
 
-      const result = await response.json();
+      if (error) {
+        console.error("Error response from server:", error);
+        throw new Error(`Server error: ${error.message || error.status}`);
+      }
 
-      if (!result.success) {
-        toast({
-          title: "Error Sending Invitations",
-          description: result.error || "There was a problem sending invitations.",
-          variant: "destructive",
-        });
+      if (!data.success) {
+        throw new Error(data.error || "There was a problem sending invitations.");
       } else {
         toast({
           title: "Invitations Sent",
-          description: `Successfully sent ${result.results.sent} invitation(s).`,
+          description: `Successfully sent ${data.results.sent} invitation(s).`,
         });
         
         // Refresh guest list to show updated status
