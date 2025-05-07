@@ -31,8 +31,8 @@ interface Guest {
 
 interface SendInvitationRequest {
   invitationId: string;
-  invitationTitle: string;
-  userId: string;
+  invitationTitle?: string;
+  userId?: string;
   imageDataUrl?: string; // Base64 data URL of invitation image
 }
 
@@ -48,6 +48,16 @@ serve(async (req) => {
   try {
     // Get request data
     const { invitationId, invitationTitle, userId, imageDataUrl } = await req.json() as SendInvitationRequest;
+    
+    if (!invitationId) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: "Missing invitationId in request"
+      }), { 
+        status: 400, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      });
+    }
     
     // Create Supabase client with auth context from request
     const authHeader = req.headers.get('Authorization');
@@ -72,6 +82,18 @@ serve(async (req) => {
       }
     });
 
+    // Get user ID from the token
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: "Failed to authenticate user"
+      }), { 
+        status: 401, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      });
+    }
+
     // Fetch invitation details to verify access and get title
     const { data: invitation, error: invitationError } = await supabase
       .from('invitations')
@@ -91,7 +113,7 @@ serve(async (req) => {
     }
 
     // Verify the user has access to this invitation
-    if (invitation.user_id !== userId) {
+    if (invitation.user_id !== user.id) {
       return new Response(JSON.stringify({
         success: false,
         error: "You don't have permission to access this invitation"
@@ -100,6 +122,9 @@ serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       });
     }
+
+    // Use the title from the fetched invitation object
+    const title = invitation.title || invitationTitle || "Your Invitation";
 
     // Get the reply-to email address and sender name from the invitation
     const replyToEmail = invitation.reply_to_email || null;
@@ -159,6 +184,26 @@ serve(async (req) => {
       }
     }
 
+    // Process the image for email attachment
+    let attachmentData = null;
+    if (imageDataUrl) {
+      try {
+        // Extract the base64 data (remove the data URL prefix)
+        const base64Data = imageDataUrl.split(',')[1];
+        if (base64Data) {
+          attachmentData = {
+            filename: `invitation-${invitationId}.png`,
+            content: base64Data,
+            encoding: 'base64',
+            disposition: 'attachment'
+          };
+        }
+      } catch (error) {
+        console.error("Error processing image for attachment:", error);
+        // Continue without attachment if processing fails
+      }
+    }
+
     // Send emails to each guest
     const results = [];
     for (const guest of guests) {
@@ -174,8 +219,8 @@ serve(async (req) => {
       }
 
       try {
-        // Generate HTML content for this guest
-        const htmlContent = generatePersonalizedHtml(guest, invitationTitle, publicAppUrl, imageDataUrl);
+        // Generate HTML content for this guest with the image embedded inline
+        const htmlContent = generatePersonalizedHtml(guest, title, publicAppUrl, imageDataUrl);
 
         let emailSent = false;
         
@@ -190,9 +235,10 @@ serve(async (req) => {
                 fromName: senderName, // Use the sender name from invitation
                 replyTo: replyToEmail, // Add the reply-to email address if available
                 to: [guest.email],
-                subject: `${invitationTitle} - You're Invited!`,
+                subject: `${title} - You're Invited!`,
                 text: `Dear ${guest.name}, you've been invited! Please check your email client to view this invitation properly.`,
-                html: htmlContent
+                html: htmlContent,
+                attachments: attachmentData ? [attachmentData] : [] // Add image as attachment
               }
             };
 
@@ -241,7 +287,7 @@ serve(async (req) => {
                 to_email: guest.email,
                 to_name: guest.name,
                 from_name: senderName, // Add sender name for EmailJS template
-                invitation_title: invitationTitle,
+                invitation_title: title,
                 rsvp_link: `${publicAppUrl}/rsvp/${guest.id}`,
                 message: `Please join us! View your invitation and RSVP here: ${publicAppUrl}/rsvp/${guest.id}`,
                 reply_to: replyToEmail || "", // Add reply-to for EmailJS template
@@ -336,6 +382,7 @@ serve(async (req) => {
 
 // Function to generate HTML for a personalized invitation
 function generatePersonalizedHtml(guest: Guest, invitationTitle: string, baseUrl: string, imageDataUrl?: string): string {
+  // Include the image inline in the email content
   const imageSection = imageDataUrl ? `
     <div style="text-align: center; margin: 20px 0;">
       <img src="${imageDataUrl}" alt="Invitation" style="max-width: 100%; border-radius: 8px; border: 1px solid #e2e8f0; max-height: 400px;" />
@@ -367,6 +414,9 @@ function generatePersonalizedHtml(guest: Guest, invitationTitle: string, baseUrl
       <p>You've been invited! Please click the button below to view your personal invitation and RSVP.</p>
       <p style="text-align: center;">
         <a href="${baseUrl}/rsvp/${guest.id}" class="button">View Invitation & RSVP</a>
+      </p>
+      <p style="font-size: 12px; color: #718096; margin-top: 15px;">
+        If you're having trouble viewing the invitation above, please check the attached invitation image.
       </p>
     </div>
     <div class="footer">

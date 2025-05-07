@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -45,6 +46,7 @@ const GuestList: React.FC<GuestListProps> = ({ invitationId, canAddMore, fabricC
   const [guestToDelete, setGuestToDelete] = useState<string | null>(null);
   const { toast } = useToast();
   const [isSending, setIsSending] = useState(false);
+  const [showAddGuestDialog, setShowAddGuestDialog] = useState(false);
 
   useEffect(() => {
     if (invitationId) {
@@ -104,6 +106,7 @@ const GuestList: React.FC<GuestListProps> = ({ invitationId, canAddMore, fabricC
         title: "Guest Added",
         description: `${newGuestName} has been added to the guest list.`,
       });
+      // Don't close the modal so user can add more guests
     } catch (error) {
       console.error('Error adding guest:', error);
       toast({
@@ -178,6 +181,7 @@ const GuestList: React.FC<GuestListProps> = ({ invitationId, canAddMore, fabricC
       const response = await fetch("/api/v1/send-invitations", {
         method: "POST",
         headers: {
+          Authorization: `Bearer ${await supabase.auth.getSession().then(res => res.data.session?.access_token)}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -306,39 +310,17 @@ const GuestList: React.FC<GuestListProps> = ({ invitationId, canAddMore, fabricC
         <Separator />
 
         <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            <Input
-              type="text"
-              placeholder="Guest Name"
-              value={newGuestName}
-              onChange={(e) => setNewGuestName(e.target.value)}
-              disabled={!canAddMore || isAddingGuest}
-            />
-            <Input
-              type="email"
-              placeholder="Guest Email"
-              value={newGuestEmail}
-              onChange={(e) => setNewGuestEmail(e.target.value)}
-              disabled={!canAddMore || isAddingGuest}
-            />
-            <Button
-              size="sm"
-              onClick={addGuest}
-              disabled={!canAddMore || isAddingGuest}
-            >
-              {isAddingGuest ? (
-                <>
-                  <Plus className="mr-2 h-4 w-4 animate-spin" />
-                  Adding...
-                </>
-              ) : (
-                <>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Guest
-                </>
-              )}
-            </Button>
-          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowAddGuestDialog(true)}
+            disabled={!canAddMore}
+            className="w-full"
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Add Guest
+          </Button>
+          
           {!canAddMore && (
             <div className="text-sm text-red-500 flex items-center gap-2">
               <AlertCircle className="h-4 w-4" />
@@ -383,6 +365,63 @@ const GuestList: React.FC<GuestListProps> = ({ invitationId, canAddMore, fabricC
       
       <h3 className="text-lg font-semibold">RSVP Responses</h3>
       <RSVPResponseList guests={guests} />
+
+      {/* Add Guest Dialog */}
+      <Dialog open={showAddGuestDialog} onOpenChange={setShowAddGuestDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Guest</DialogTitle>
+            <DialogDescription>
+              Enter the guest details below.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="name">Guest Name</Label>
+              <Input
+                id="name"
+                placeholder="Enter guest name"
+                value={newGuestName}
+                onChange={(e) => setNewGuestName(e.target.value)}
+              />
+            </div>
+            
+            <div className="grid gap-2">
+              <Label htmlFor="email">Guest Email</Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="Enter guest email"
+                value={newGuestEmail}
+                onChange={(e) => setNewGuestEmail(e.target.value)}
+              />
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAddGuestDialog(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={addGuest} 
+              disabled={isAddingGuest || !newGuestName || !newGuestEmail}
+            >
+              {isAddingGuest ? (
+                <>
+                  <Plus className="mr-2 h-4 w-4 animate-spin" />
+                  Adding...
+                </>
+              ) : (
+                <>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Guest
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={guestToDelete !== null} onOpenChange={() => setGuestToDelete(null)}>

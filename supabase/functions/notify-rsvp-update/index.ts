@@ -29,6 +29,7 @@ interface RSVPNotificationRequest {
   rsvpMessage?: string;
   replyToEmail: string;
   senderName: string;
+  imageDataUrl?: string; // Optional invitation image
 }
 
 serve(async (req) => {
@@ -48,7 +49,8 @@ serve(async (req) => {
       rsvpStatus,
       rsvpMessage,
       replyToEmail,
-      senderName
+      senderName,
+      imageDataUrl
     } = await req.json() as RSVPNotificationRequest;
     
     // Check if SMTP is configured
@@ -81,6 +83,36 @@ serve(async (req) => {
         statusMessage = "responded to";
     }
 
+    // Add the image if available
+    let imageSection = '';
+    if (imageDataUrl) {
+      imageSection = `
+        <div style="text-align: center; margin: 20px 0;">
+          <img src="${imageDataUrl}" alt="Invitation" style="max-width: 100%; border-radius: 8px; border: 1px solid #e2e8f0; max-height: 300px;" />
+        </div>
+      `;
+    }
+
+    // Process the image for email attachment
+    let attachmentData = null;
+    if (imageDataUrl) {
+      try {
+        // Extract the base64 data (remove the data URL prefix)
+        const base64Data = imageDataUrl.split(',')[1];
+        if (base64Data) {
+          attachmentData = {
+            filename: `invitation-${invitationId}.png`,
+            content: base64Data,
+            encoding: 'base64',
+            disposition: 'attachment'
+          };
+        }
+      } catch (error) {
+        console.error("Error processing image for attachment:", error);
+        // Continue without attachment if processing fails
+      }
+    }
+
     // Generate HTML content for the notification email
     const htmlContent = `
     <!DOCTYPE html>
@@ -101,6 +133,8 @@ serve(async (req) => {
       <h1>RSVP Update</h1>
       <div class="notification">
         <p><strong>${guestName}</strong> (${guestEmail}) ${statusMessage} your invitation: <strong>${invitationTitle}</strong>.</p>
+        
+        ${imageSection}
         
         ${rsvpMessage ? `
         <div class="message">
@@ -126,7 +160,8 @@ serve(async (req) => {
         subject: `RSVP Update: ${guestName} ${statusMessage} "${invitationTitle}"`,
         text: `${guestName} (${guestEmail}) ${statusMessage} your invitation "${invitationTitle}".${rsvpMessage ? ` They left this message: "${rsvpMessage}"` : ''}`,
         html: htmlContent,
-        replyTo: guestEmail // Set reply-to as the guest's email so the organizer can reply directly
+        replyTo: guestEmail, // Set reply-to as the guest's email so the organizer can reply directly
+        attachments: attachmentData ? [attachmentData] : [] // Add image as attachment if available
       }
     };
 
