@@ -841,14 +841,14 @@ const InvitationEditor = () => {
     reader.onload = (e) => {
       if (!e.target || typeof e.target.result !== 'string') return;
       
-      const img = new Image();
-      img.src = e.target.result;
+      const imgElement = document.createElement('img');
+      imgElement.src = e.target.result;
       
-      img.onload = () => {
+      imgElement.onload = () => {
         // Update canvas size based on image dimensions
         const newCanvasSize = {
-          width: img.width,
-          height: img.height
+          width: imgElement.width,
+          height: imgElement.height
         };
         
         // Set new canvas size
@@ -871,7 +871,7 @@ const InvitationEditor = () => {
     
     reader.readAsDataURL(file);
   };
-  
+
   // Function to handle canvas resize
   const handleCanvasResize = (width: number, height: number) => {
     if (!fabricCanvas) return;
