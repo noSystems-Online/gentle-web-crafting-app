@@ -113,6 +113,8 @@ const InvitationEditor = () => {
   // Initialize canvas
   useEffect(() => {
     if (!canvasRef.current) return;
+    
+    console.log("Initializing canvas with dimensions:", canvasSize.width, "x", canvasSize.height);
 
     // Create a new canvas with fabric.js
     const canvas = new fabric.Canvas(canvasRef.current, {
@@ -133,6 +135,7 @@ const InvitationEditor = () => {
     canvas.on('object:removed', () => setHasUnsavedChanges(true));
 
     setFabricCanvas(canvas);
+    setIsCanvasLoading(false); // Make sure we set loading to false once initialized
 
     // We set canvas first before loading invitation
     return () => {
@@ -351,15 +354,31 @@ const InvitationEditor = () => {
         setReplyToEmail(data.reply_to_email || ''); 
         setSenderName(data.sender_name || ''); 
         
+        // Update canvas size if needed
+        if (data.editor_data && data.editor_data.width && data.editor_data.height) {
+          setCanvasSize({
+            width: data.editor_data.width,
+            height: data.editor_data.height
+          });
+        }
+        
         if (data.editor_data && fabricCanvas) {
           try {
             console.log("Loading canvas data:", data.editor_data);
-            fabricCanvas.loadFromJSON(data.editor_data, () => {
-              console.log("Canvas data loaded successfully");
-              fabricCanvas.renderAll();
-              setIsLoaded(true);
-              setIsCanvasLoading(false); // Stop loading when canvas is ready
-            });
+            // Make sure the canvas is ready before loading data
+            setTimeout(() => {
+              try {
+                fabricCanvas.loadFromJSON(data.editor_data, () => {
+                  console.log("Canvas data loaded successfully");
+                  fabricCanvas.renderAll();
+                  setIsLoaded(true);
+                  setIsCanvasLoading(false); // Stop loading when canvas is ready
+                });
+              } catch (e) {
+                console.error("Error loading canvas data:", e);
+                setIsCanvasLoading(false); // Stop loading on error too
+              }
+            }, 100);
           } catch (e) {
             console.error("Error loading canvas data:", e);
             setIsCanvasLoading(false); // Stop loading on error too
@@ -838,12 +857,17 @@ const InvitationEditor = () => {
     const file = event.target.files[0];
     const reader = new FileReader();
     
+    setIsCanvasLoading(true); // Show loading while processing image
+    
     reader.onload = (e) => {
-      if (!e.target || typeof e.target.result !== 'string') return;
+      if (!e.target || typeof e.target.result !== 'string') {
+        setIsCanvasLoading(false);
+        return;
+      }
       
       const imgElement = document.createElement('img');
-      imgElement.src = e.target.result;
       
+      // Handle image loading
       imgElement.onload = () => {
         // Update canvas size based on image dimensions
         const newCanvasSize = {
@@ -851,22 +875,60 @@ const InvitationEditor = () => {
           height: imgElement.height
         };
         
-        // Set new canvas size
-        setCanvasSize(newCanvasSize);
+        console.log("Setting new canvas size:", newCanvasSize.width, "x", newCanvasSize.height);
         
-        // Create fabric Image object
-        fabric.Image.fromURL(e.target.result as string, (bgImg) => {
-          // Fit image to the canvas
-          fabricCanvas.setBackgroundImage(bgImg, fabricCanvas.renderAll.bind(fabricCanvas), {
-            scaleX: 1,
-            scaleY: 1,
-            originX: 'left',
-            originY: 'top'
-          });
-        }, { crossOrigin: 'anonymous' });
-        
-        setHasUnsavedChanges(true);
+        try {
+          // Set new canvas size - this will trigger the useEffect to recreate the canvas
+          setCanvasSize(newCanvasSize);
+          
+          // We need to set a timeout to ensure the canvas is recreated before setting the background image
+          setTimeout(() => {
+            if (!fabricCanvas) {
+              setIsCanvasLoading(false);
+              return;
+            }
+            
+            // Create fabric Image object
+            fabric.Image.fromURL(e.target.result as string, (bgImg) => {
+              // Set the background image
+              fabricCanvas.setBackgroundImage(bgImg, fabricCanvas.renderAll.bind(fabricCanvas), {
+                scaleX: 1,
+                scaleY: 1,
+                originX: 'left',
+                originY: 'top'
+              });
+              
+              setHasUnsavedChanges(true);
+              setIsCanvasLoading(false);
+            }, { crossOrigin: 'anonymous' });
+          }, 200); // Give enough time for canvas recreation
+        } catch (err) {
+          console.error("Error setting background image:", err);
+          setIsCanvasLoading(false);
+        }
       };
+      
+      // Handle image loading errors
+      imgElement.onerror = () => {
+        console.error("Error loading background image");
+        setIsCanvasLoading(false);
+        toast({
+          title: "Error",
+          description: "Failed to load the background image.",
+          variant: "destructive",
+        });
+      };
+      
+      imgElement.src = e.target.result;
+    };
+    
+    reader.onerror = () => {
+      setIsCanvasLoading(false);
+      toast({
+        title: "Error",
+        description: "Failed to read the image file.",
+        variant: "destructive",
+      });
     };
     
     reader.readAsDataURL(file);
@@ -876,10 +938,26 @@ const InvitationEditor = () => {
   const handleCanvasResize = (width: number, height: number) => {
     if (!fabricCanvas) return;
     
+    setIsCanvasLoading(true);
+    
+    // Store current canvas state
+    const currentState = fabricCanvas.toJSON();
+    
+    // Update canvas size
     setCanvasSize({ width, height });
-    fabricCanvas.setDimensions({ width, height });
-    fabricCanvas.renderAll();
-    setHasUnsavedChanges(true);
+    
+    // We need to wait for the canvas to be recreated
+    setTimeout(() => {
+      if (fabricCanvas) {
+        // Reload canvas content after resize
+        fabricCanvas.loadFromJSON(currentState, () => {
+          fabricCanvas.renderAll();
+          setHasUnsavedChanges(true);
+          setIsCanvasLoading(false);
+        });
+      }
+    }, 200);
+    
     setShowResizeControls(false);
   };
 
