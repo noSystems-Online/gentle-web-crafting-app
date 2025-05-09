@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { fabric } from 'fabric';
@@ -354,8 +355,15 @@ const InvitationEditor = () => {
         setReplyToEmail(data.reply_to_email || ''); 
         setSenderName(data.sender_name || ''); 
         
-        // Update canvas size if needed
-        if (data.editor_data && data.editor_data.width && data.editor_data.height) {
+        // Update canvas size if needed - fixed TypeScript error by using type guards
+        if (data.editor_data && 
+            typeof data.editor_data === 'object' && 
+            data.editor_data !== null &&
+            'width' in data.editor_data && 
+            'height' in data.editor_data &&
+            typeof data.editor_data.width === 'number' &&
+            typeof data.editor_data.height === 'number') {
+          
           setCanvasSize({
             width: data.editor_data.width,
             height: data.editor_data.height
@@ -365,8 +373,15 @@ const InvitationEditor = () => {
         if (data.editor_data && fabricCanvas) {
           try {
             console.log("Loading canvas data:", data.editor_data);
-            // Make sure the canvas is ready before loading data
+            
+            // Don't attempt to load the canvas data immediately, but delay it
             setTimeout(() => {
+              if (!fabricCanvas || !fabricCanvas.getContext()) {
+                console.error("Canvas context not ready");
+                setIsCanvasLoading(false);
+                return;
+              }
+              
               try {
                 fabricCanvas.loadFromJSON(data.editor_data, () => {
                   console.log("Canvas data loaded successfully");
@@ -378,7 +393,7 @@ const InvitationEditor = () => {
                 console.error("Error loading canvas data:", e);
                 setIsCanvasLoading(false); // Stop loading on error too
               }
-            }, 100);
+            }, 300); // Increased delay to ensure the canvas is fully initialized
           } catch (e) {
             console.error("Error loading canvas data:", e);
             setIsCanvasLoading(false); // Stop loading on error too
@@ -857,40 +872,45 @@ const InvitationEditor = () => {
     const file = event.target.files[0];
     const reader = new FileReader();
     
-    setIsCanvasLoading(true); // Show loading while processing image
+    // Show loading indicator
+    setIsCanvasLoading(true);
     
+    // Read file as data URL
     reader.onload = (e) => {
       if (!e.target || typeof e.target.result !== 'string') {
         setIsCanvasLoading(false);
         return;
       }
       
+      // Create an HTML image element to get dimensions
       const imgElement = document.createElement('img');
       
-      // Handle image loading
+      // Set up image onload handler
       imgElement.onload = () => {
-        // Update canvas size based on image dimensions
-        const newCanvasSize = {
-          width: imgElement.width,
-          height: imgElement.height
-        };
+        // Get image dimensions
+        const imgWidth = imgElement.naturalWidth;
+        const imgHeight = imgElement.naturalHeight;
         
-        console.log("Setting new canvas size:", newCanvasSize.width, "x", newCanvasSize.height);
-        
-        try {
-          // Set new canvas size - this will trigger the useEffect to recreate the canvas
-          setCanvasSize(newCanvasSize);
+        // Safely dispose of the current canvas before resizing
+        if (fabricCanvas) {
+          // Save the current state to restore after resize
+          const currentState = fabricCanvas.toJSON();
           
-          // We need to set a timeout to ensure the canvas is recreated before setting the background image
+          // Update canvas size
+          setCanvasSize({
+            width: imgWidth,
+            height: imgHeight
+          });
+          
+          // We need to wait for the canvas to be recreated with the new size
           setTimeout(() => {
             if (!fabricCanvas) {
               setIsCanvasLoading(false);
               return;
             }
             
-            // Create fabric Image object
+            // Set the background image after canvas has been recreated
             fabric.Image.fromURL(e.target.result as string, (bgImg) => {
-              // Set the background image
               fabricCanvas.setBackgroundImage(bgImg, fabricCanvas.renderAll.bind(fabricCanvas), {
                 scaleX: 1,
                 scaleY: 1,
@@ -898,39 +918,61 @@ const InvitationEditor = () => {
                 originY: 'top'
               });
               
+              // If there was previous content, try to restore it
+              if (currentState && currentState.objects && Array.isArray(currentState.objects)) {
+                try {
+                  // Only restore objects, not background or canvas size
+                  currentState.objects.forEach((obj) => {
+                    fabric.util.enlivenObjects([obj], (enlivenedObjects) => {
+                      if (enlivenedObjects[0] && fabricCanvas) {
+                        fabricCanvas.add(enlivenedObjects[0]);
+                        fabricCanvas.renderAll();
+                      }
+                    });
+                  });
+                } catch (restoreErr) {
+                  console.error("Failed to restore canvas objects:", restoreErr);
+                }
+              }
+              
               setHasUnsavedChanges(true);
               setIsCanvasLoading(false);
+              
+              // Trigger a save with the new background
+              saveInvitation(true);
             }, { crossOrigin: 'anonymous' });
-          }, 200); // Give enough time for canvas recreation
-        } catch (err) {
-          console.error("Error setting background image:", err);
+          }, 500); // Increased delay to ensure canvas recreation is complete
+        } else {
           setIsCanvasLoading(false);
         }
       };
       
-      // Handle image loading errors
+      // Handle image loading error
       imgElement.onerror = () => {
         console.error("Error loading background image");
         setIsCanvasLoading(false);
         toast({
           title: "Error",
-          description: "Failed to load the background image.",
+          description: "Failed to load the background image",
           variant: "destructive",
         });
       };
       
-      imgElement.src = e.target.result;
+      // Start loading the image to get dimensions
+      imgElement.src = e.target.result as string;
     };
     
+    // Handle file reading error
     reader.onerror = () => {
       setIsCanvasLoading(false);
       toast({
         title: "Error",
-        description: "Failed to read the image file.",
+        description: "Failed to read the image file",
         variant: "destructive",
       });
     };
     
+    // Start reading the file
     reader.readAsDataURL(file);
   };
 
@@ -946,7 +988,7 @@ const InvitationEditor = () => {
     // Update canvas size
     setCanvasSize({ width, height });
     
-    // We need to wait for the canvas to be recreated
+    // We need a timeout to ensure the canvas is recreated before restoring content
     setTimeout(() => {
       if (fabricCanvas) {
         // Reload canvas content after resize
@@ -955,8 +997,10 @@ const InvitationEditor = () => {
           setHasUnsavedChanges(true);
           setIsCanvasLoading(false);
         });
+      } else {
+        setIsCanvasLoading(false);
       }
-    }, 200);
+    }, 500); // Increased timeout for canvas recreation
     
     setShowResizeControls(false);
   };
@@ -1156,7 +1200,10 @@ const InvitationEditor = () => {
                       </div>
                     )}
                     
-                    <canvas ref={canvasRef} className="mx-auto" />
+                    {/* Canvas element with unique key to force a complete remount when size changes */}
+                    <div key={`canvas-container-${canvasSize.width}-${canvasSize.height}`} className="flex justify-center items-center">
+                      <canvas ref={canvasRef} className="mx-auto" />
+                    </div>
                     
                     {!user && (
                       <div className="absolute top-2 right-2">

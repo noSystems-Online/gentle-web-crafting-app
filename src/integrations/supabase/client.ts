@@ -26,7 +26,7 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
         });
       }
       // Default fetch with standard timeout
-      return fetch(url, options);
+      return fetch(url, fetchOptions);
     },
   },
 });
