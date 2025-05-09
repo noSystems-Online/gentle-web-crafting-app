@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { fabric } from 'fabric';
@@ -355,60 +354,66 @@ const InvitationEditor = () => {
         setReplyToEmail(data.reply_to_email || ''); 
         setSenderName(data.sender_name || ''); 
         
-        // Update canvas size if needed - fixed TypeScript error by using type guards
+        // Get canvas dimensions from the stored editor data
+        let canvasWidth = canvasSize.width;
+        let canvasHeight = canvasSize.height;
+        
+        // Update canvas size if needed
         if (data.editor_data && 
             typeof data.editor_data === 'object' && 
-            data.editor_data !== null &&
-            'width' in data.editor_data && 
-            'height' in data.editor_data &&
-            typeof data.editor_data.width === 'number' &&
-            typeof data.editor_data.height === 'number') {
+            data.editor_data !== null) {
           
-          setCanvasSize({
-            width: data.editor_data.width,
-            height: data.editor_data.height
-          });
-        }
-        
-        if (data.editor_data && fabricCanvas) {
-          try {
-            console.log("Loading canvas data:", data.editor_data);
+          // Check for width and height in editor_data
+          if ('width' in data.editor_data && 
+              'height' in data.editor_data &&
+              typeof data.editor_data.width === 'number' &&
+              typeof data.editor_data.height === 'number') {
             
-            // Don't attempt to load the canvas data immediately, but delay it
-            setTimeout(() => {
-              if (!fabricCanvas || !fabricCanvas.getContext()) {
-                console.error("Canvas context not ready");
-                setIsCanvasLoading(false);
-                return;
-              }
-              
-              try {
-                fabricCanvas.loadFromJSON(data.editor_data, () => {
-                  console.log("Canvas data loaded successfully");
-                  fabricCanvas.renderAll();
-                  setIsLoaded(true);
-                  setIsCanvasLoading(false); // Stop loading when canvas is ready
-                });
-              } catch (e) {
-                console.error("Error loading canvas data:", e);
-                setIsCanvasLoading(false); // Stop loading on error too
-              }
-            }, 300); // Increased delay to ensure the canvas is fully initialized
-          } catch (e) {
-            console.error("Error loading canvas data:", e);
-            setIsCanvasLoading(false); // Stop loading on error too
+            canvasWidth = data.editor_data.width;
+            canvasHeight = data.editor_data.height;
+            
+            // Update the canvas size state
+            setCanvasSize({
+              width: canvasWidth,
+              height: canvasHeight
+            });
           }
+          
+          // Wait for canvas to be fully initialized with proper dimensions
+          setTimeout(() => {
+            if (!fabricCanvas || !fabricCanvas.getContext()) {
+              console.error("Canvas context not ready");
+              setIsCanvasLoading(false);
+              return;
+            }
+            
+            // Set canvas dimensions in case they changed
+            fabricCanvas.setWidth(canvasWidth);
+            fabricCanvas.setHeight(canvasHeight);
+            
+            try {
+              fabricCanvas.loadFromJSON(data.editor_data, () => {
+                console.log("Canvas data loaded successfully");
+                fabricCanvas.renderAll();
+                setIsLoaded(true);
+                setIsCanvasLoading(false);
+              });
+            } catch (e) {
+              console.error("Error loading canvas data:", e);
+              setIsCanvasLoading(false);
+            }
+          }, 300);
         } else {
           console.log("No editor data or canvas not ready");
-          setIsCanvasLoading(false); // No data to load
+          setIsCanvasLoading(false);
         }
       } else {
         console.log("No invitation data found");
-        setIsCanvasLoading(false); // No data found
+        setIsCanvasLoading(false);
       }
     } catch (error) {
       console.error("Error loading invitation:", error);
-      setIsCanvasLoading(false); // Stop loading on any error
+      setIsCanvasLoading(false);
       toast({
         title: "Failed to load invitation",
         description: "There was an error loading your invitation.",
@@ -791,6 +796,11 @@ const InvitationEditor = () => {
     setIsCropping(false);
   };
 
+  // Add state for sending invitations dialog with progress
+  const [showSendProgress, setShowSendProgress] = useState(false);
+  const [sendProgress, setSendProgress] = useState(0);
+  const [sendComplete, setSendComplete] = useState(false);
+
   // When invitations are sent, we need to send the canvas image as well
   const sendInvitations = async () => {
     if (!fabricCanvas || !user || !effectiveId) {
@@ -804,6 +814,9 @@ const InvitationEditor = () => {
     
     try {
       setIsSending(true);
+      setShowSendProgress(true);
+      setSendProgress(0);
+      setSendComplete(false);
       
       // Generate an image of the current canvas
       const imageDataUrl = fabricCanvas.toDataURL({
@@ -811,36 +824,50 @@ const InvitationEditor = () => {
         quality: 0.8,
       });
       
-      const response = await fetch("/api/v1/send-invitations", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${await supabase.auth.getSession().then(res => res.data.session?.access_token)}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
+      // Call the Supabase Edge Function
+      const { data, error } = await supabase.functions.invoke('send-invitations', {
+        body: {
           invitationId: effectiveId,
           invitationTitle: invitationTitle,
           userId: user.id,
           imageDataUrl: imageDataUrl // Send the canvas image as a data URL
-        }),
+        }
       });
 
-      const result = await response.json();
+      // Simulate progress updates
+      const progressInterval = setInterval(() => {
+        setSendProgress(prev => {
+          const newProgress = prev + 5;
+          if (newProgress >= 100) {
+            clearInterval(progressInterval);
+            return 100;
+          }
+          return newProgress;
+        });
+      }, 200);
+      
+      if (error) {
+        clearInterval(progressInterval);
+        throw error;
+      }
 
-      if (!result.success) {
-        toast({
-          title: "Error Sending Invitations",
-          description: result.error || "There was a problem sending invitations.",
-          variant: "destructive",
-        });
+      if (!data.success) {
+        clearInterval(progressInterval);
+        throw new Error(data.error || "There was a problem sending invitations.");
       } else {
-        toast({
-          title: "Invitations Sent",
-          description: `Successfully sent ${result.results.sent} invitation(s).`,
-        });
+        // Ensure progress reaches 100%
+        setSendProgress(100);
+        setSendComplete(true);
         
-        // Refresh guest list to show updated status
-        fetchGuests();
+        setTimeout(() => {
+          toast({
+            title: "Invitations Sent",
+            description: `Successfully sent ${data.results.sent} invitation(s).`,
+          });
+          
+          // Refresh guest list to show updated status
+          fetchGuests();
+        }, 500);
       }
     } catch (error) {
       console.error("Error sending invitations:", error);
@@ -851,6 +878,14 @@ const InvitationEditor = () => {
       });
     } finally {
       setIsSending(false);
+      
+      if (sendComplete) {
+        setTimeout(() => {
+          setShowSendProgress(false);
+        }, 1500);
+      } else {
+        setShowSendProgress(false);
+      }
     }
   };
 
@@ -891,60 +926,42 @@ const InvitationEditor = () => {
         const imgWidth = imgElement.naturalWidth;
         const imgHeight = imgElement.naturalHeight;
         
-        // Safely dispose of the current canvas before resizing
-        if (fabricCanvas) {
-          // Save the current state to restore after resize
-          const currentState = fabricCanvas.toJSON();
+        console.log("Image dimensions:", imgWidth, "x", imgHeight);
+        
+        // Update canvas size
+        setCanvasSize({
+          width: imgWidth,
+          height: imgHeight
+        });
+        
+        // We need to wait for the canvas to be updated with the new size
+        setTimeout(() => {
+          if (!fabricCanvas) {
+            setIsCanvasLoading(false);
+            return;
+          }
           
-          // Update canvas size
-          setCanvasSize({
-            width: imgWidth,
-            height: imgHeight
-          });
+          // Manually update fabric canvas dimensions
+          fabricCanvas.setWidth(imgWidth);
+          fabricCanvas.setHeight(imgHeight);
           
-          // We need to wait for the canvas to be recreated with the new size
-          setTimeout(() => {
-            if (!fabricCanvas) {
-              setIsCanvasLoading(false);
-              return;
-            }
+          // Set the background image
+          fabric.Image.fromURL(e.target.result as string, (bgImg) => {
+            fabricCanvas.setBackgroundImage(bgImg, fabricCanvas.renderAll.bind(fabricCanvas), {
+              scaleX: 1,
+              scaleY: 1,
+              originX: 'left',
+              originY: 'top'
+            });
             
-            // Set the background image after canvas has been recreated
-            fabric.Image.fromURL(e.target.result as string, (bgImg) => {
-              fabricCanvas.setBackgroundImage(bgImg, fabricCanvas.renderAll.bind(fabricCanvas), {
-                scaleX: 1,
-                scaleY: 1,
-                originX: 'left',
-                originY: 'top'
-              });
-              
-              // If there was previous content, try to restore it
-              if (currentState && currentState.objects && Array.isArray(currentState.objects)) {
-                try {
-                  // Only restore objects, not background or canvas size
-                  currentState.objects.forEach((obj) => {
-                    fabric.util.enlivenObjects([obj], (enlivenedObjects) => {
-                      if (enlivenedObjects[0] && fabricCanvas) {
-                        fabricCanvas.add(enlivenedObjects[0]);
-                        fabricCanvas.renderAll();
-                      }
-                    });
-                  });
-                } catch (restoreErr) {
-                  console.error("Failed to restore canvas objects:", restoreErr);
-                }
-              }
-              
-              setHasUnsavedChanges(true);
-              setIsCanvasLoading(false);
-              
-              // Trigger a save with the new background
-              saveInvitation(true);
-            }, { crossOrigin: 'anonymous' });
-          }, 500); // Increased delay to ensure canvas recreation is complete
-        } else {
-          setIsCanvasLoading(false);
-        }
+            fabricCanvas.renderAll();
+            setHasUnsavedChanges(true);
+            setIsCanvasLoading(false);
+            
+            // Trigger a save with the new background
+            saveInvitation(true);
+          }, { crossOrigin: 'anonymous' });
+        }, 500);
       };
       
       // Handle image loading error
@@ -1286,6 +1303,43 @@ const InvitationEditor = () => {
               className="w-full"
             >
               {downloadComplete ? "Close" : "Processing..."}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Send Invitation Progress Dialog */}
+      <Dialog open={showSendProgress} onOpenChange={(open) => {
+        if (!isSending) setShowSendProgress(open);
+      }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {sendComplete ? "Invitations Sent" : "Sending Invitations"}
+            </DialogTitle>
+            <DialogDescription>
+              {sendComplete 
+                ? "All invitations have been sent successfully." 
+                : "Please wait while we send personalized invitations to your guests."}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="py-6">
+            <Progress value={sendProgress} className="w-full" />
+            <p className="text-center text-sm text-muted-foreground mt-2">
+              {sendComplete 
+                ? "100% Complete" 
+                : `${sendProgress}% Complete - Processing invitations...`}
+            </p>
+          </div>
+          
+          <DialogFooter>
+            <Button 
+              disabled={!sendComplete} 
+              onClick={() => setShowSendProgress(false)}
+              className="w-full"
+            >
+              {sendComplete ? "Close" : "Processing..."}
             </Button>
           </DialogFooter>
         </DialogContent>

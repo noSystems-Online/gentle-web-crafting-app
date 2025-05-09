@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -19,6 +18,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { Progress } from "@/components/ui/progress";
 
 interface Guest {
   id: string;
@@ -34,7 +34,7 @@ interface Guest {
 interface GuestListProps {
   invitationId: string | null;
   canAddMore: boolean;
-  fabricCanvas: any;
+  fabricCanvas: fabric.Canvas | null;
 }
 
 const GuestList: React.FC<GuestListProps> = ({ invitationId, canAddMore, fabricCanvas }) => {
@@ -47,6 +47,9 @@ const GuestList: React.FC<GuestListProps> = ({ invitationId, canAddMore, fabricC
   const { toast } = useToast();
   const [isSending, setIsSending] = useState(false);
   const [showAddGuestDialog, setShowAddGuestDialog] = useState(false);
+  const [showSendProgress, setShowSendProgress] = useState(false);
+  const [sendProgress, setSendProgress] = useState(0);
+  const [sendComplete, setSendComplete] = useState(false);
 
   useEffect(() => {
     if (invitationId) {
@@ -171,6 +174,9 @@ const GuestList: React.FC<GuestListProps> = ({ invitationId, canAddMore, fabricC
     
     try {
       setIsSending(true);
+      setShowSendProgress(true);
+      setSendProgress(0);
+      setSendComplete(false);
       
       // Generate an image of the current canvas
       const imageDataUrl = fabricCanvas.toDataURL({
@@ -178,7 +184,19 @@ const GuestList: React.FC<GuestListProps> = ({ invitationId, canAddMore, fabricC
         quality: 0.8,
       });
       
-      // Call the Supabase Edge Function directly
+      // Simulate progress updates
+      const progressInterval = setInterval(() => {
+        setSendProgress(prev => {
+          const newProgress = prev + 5;
+          if (newProgress >= 100) {
+            clearInterval(progressInterval);
+            return 100;
+          }
+          return newProgress;
+        });
+      }, 200);
+      
+      // Call the Supabase Edge Function
       const { data, error } = await supabase.functions.invoke('send-invitations', {
         body: {
           invitationId: invitationId,
@@ -187,20 +205,28 @@ const GuestList: React.FC<GuestListProps> = ({ invitationId, canAddMore, fabricC
       });
 
       if (error) {
+        clearInterval(progressInterval);
         console.error("Error response from server:", error);
         throw new Error(`Server error: ${error.message || error.status}`);
       }
 
       if (!data.success) {
+        clearInterval(progressInterval);
         throw new Error(data.error || "There was a problem sending invitations.");
       } else {
-        toast({
-          title: "Invitations Sent",
-          description: `Successfully sent ${data.results.sent} invitation(s).`,
-        });
+        // Ensure progress reaches 100%
+        setSendProgress(100);
+        setSendComplete(true);
         
-        // Refresh guest list to show updated status
-        fetchGuests();
+        setTimeout(() => {
+          toast({
+            title: "Invitations Sent",
+            description: `Successfully sent ${data.results.sent} invitation(s).`,
+          });
+          
+          // Refresh guest list to show updated status
+          fetchGuests();
+        }, 500);
       }
     } catch (error) {
       console.error("Error sending invitations:", error);
@@ -209,8 +235,15 @@ const GuestList: React.FC<GuestListProps> = ({ invitationId, canAddMore, fabricC
         description: "Failed to send invitations. Please try again.",
         variant: "destructive",
       });
+      setShowSendProgress(false);
     } finally {
       setIsSending(false);
+      
+      if (sendComplete) {
+        setTimeout(() => {
+          setShowSendProgress(false);
+        }, 1500);
+      }
     }
   };
 
@@ -360,6 +393,43 @@ const GuestList: React.FC<GuestListProps> = ({ invitationId, canAddMore, fabricC
       
       <h3 className="text-lg font-semibold">RSVP Responses</h3>
       <RSVPResponseList guests={guests} />
+
+      {/* Send Invitation Progress Dialog */}
+      <Dialog open={showSendProgress} onOpenChange={(open) => {
+        if (!isSending) setShowSendProgress(open);
+      }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {sendComplete ? "Invitations Sent" : "Sending Invitations"}
+            </DialogTitle>
+            <DialogDescription>
+              {sendComplete 
+                ? "All invitations have been sent successfully." 
+                : "Please wait while we send personalized invitations to your guests."}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="py-6">
+            <Progress value={sendProgress} className="w-full" />
+            <p className="text-center text-sm text-muted-foreground mt-2">
+              {sendComplete 
+                ? "100% Complete" 
+                : `${sendProgress}% Complete - Processing invitations...`}
+            </p>
+          </div>
+          
+          <DialogFooter>
+            <Button 
+              disabled={!sendComplete} 
+              onClick={() => setShowSendProgress(false)}
+              className="w-full"
+            >
+              {sendComplete ? "Close" : "Processing..."}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Add Guest Dialog */}
       <Dialog open={showAddGuestDialog} onOpenChange={setShowAddGuestDialog}>
