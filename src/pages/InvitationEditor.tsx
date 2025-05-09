@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { fabric } from 'fabric';
@@ -16,7 +15,7 @@ import TextControls from '@/components/editor/TextControls';
 import TemplateSelector from '@/components/editor/TemplateSelector';
 import GuestList from '@/components/editor/GuestList';
 import CropTool from '@/components/editor/CropTool';
-import { AlertCircle, Download, Mail, User, Loader2 } from 'lucide-react';
+import { AlertCircle, Download, Mail, User, Loader2, Eye, ArrowLeft, ArrowRight, Image, Move } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -30,6 +29,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import PreviewDialog from '@/components/editor/PreviewDialog';
+import ResizeControls from '@/components/editor/ResizeControls';
 
 interface Guest {
   id: string;
@@ -94,6 +95,14 @@ const InvitationEditor = () => {
   // Track if changes have been made that need saving
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   
+  // Add preview related states
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewGuestIndex, setPreviewGuestIndex] = useState(0);
+  
+  // Add canvas size adjustment state
+  const [canvasSize, setCanvasSize] = useState({ width: 600, height: 400 });
+  const [showResizeControls, setShowResizeControls] = useState(false);
+  
   // Generate a temporary ID for new invitations
   useEffect(() => {
     if (!id) {
@@ -107,8 +116,8 @@ const InvitationEditor = () => {
 
     // Create a new canvas with fabric.js
     const canvas = new fabric.Canvas(canvasRef.current, {
-      width: 600,
-      height: 400,
+      width: canvasSize.width,
+      height: canvasSize.height,
       backgroundColor: '#ffffff',
       preserveObjectStacking: true, // Maintain z-index when selecting objects
     });
@@ -133,7 +142,7 @@ const InvitationEditor = () => {
         clearTimeout(autoSaveTimerRef.current);
       }
     };
-  }, []);
+  }, [canvasSize]); // Added canvasSize dependency to re-initialize canvas when size changes
 
   // Separate useEffect for loading the invitation after canvas is initialized
   useEffect(() => {
@@ -811,6 +820,69 @@ const InvitationEditor = () => {
     }
   };
 
+  // New function to handle preview navigation
+  const handlePreviewNavigation = (direction: 'next' | 'previous') => {
+    if (guests.length === 0) return;
+    
+    if (direction === 'next') {
+      setPreviewGuestIndex((prev) => (prev + 1) % guests.length);
+    } else {
+      setPreviewGuestIndex((prev) => (prev - 1 + guests.length) % guests.length);
+    }
+  };
+
+  // Function to handle background image upload
+  const handleBackgroundImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!fabricCanvas || !event.target.files || !event.target.files[0]) return;
+    
+    const file = event.target.files[0];
+    const reader = new FileReader();
+    
+    reader.onload = (e) => {
+      if (!e.target || typeof e.target.result !== 'string') return;
+      
+      const img = new Image();
+      img.src = e.target.result;
+      
+      img.onload = () => {
+        // Update canvas size based on image dimensions
+        const newCanvasSize = {
+          width: img.width,
+          height: img.height
+        };
+        
+        // Set new canvas size
+        setCanvasSize(newCanvasSize);
+        
+        // Create fabric Image object
+        fabric.Image.fromURL(e.target.result as string, (bgImg) => {
+          // Fit image to the canvas
+          fabricCanvas.setBackgroundImage(bgImg, fabricCanvas.renderAll.bind(fabricCanvas), {
+            scaleX: 1,
+            scaleY: 1,
+            originX: 'left',
+            originY: 'top'
+          });
+        }, { crossOrigin: 'anonymous' });
+        
+        setHasUnsavedChanges(true);
+      };
+    };
+    
+    reader.readAsDataURL(file);
+  };
+  
+  // Function to handle canvas resize
+  const handleCanvasResize = (width: number, height: number) => {
+    if (!fabricCanvas) return;
+    
+    setCanvasSize({ width, height });
+    fabricCanvas.setDimensions({ width, height });
+    fabricCanvas.renderAll();
+    setHasUnsavedChanges(true);
+    setShowResizeControls(false);
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -912,6 +984,44 @@ const InvitationEditor = () => {
                         onApply={applyTemplate}
                         canAccessPremium={canAccessPremiumTemplate()}
                       />
+                      
+                      {/* Canvas size controls */}
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <Label className="flex items-center gap-2">
+                            <Move className="h-4 w-4" /> Canvas Size
+                          </Label>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => setShowResizeControls(true)}
+                          >
+                            Adjust Size
+                          </Button>
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          Current: {canvasSize.width}px × {canvasSize.height}px
+                        </div>
+                      </div>
+                      
+                      {/* Background image uploader */}
+                      <div className="space-y-2">
+                        <Label htmlFor="bgImage" className="flex items-center gap-2">
+                          <Image className="h-4 w-4" /> Background Image
+                        </Label>
+                        <div className="flex flex-col gap-2">
+                          <Input
+                            id="bgImage"
+                            type="file"
+                            onChange={handleBackgroundImageUpload}
+                            accept="image/*"
+                            className="text-sm"
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Upload an image to use as background. Canvas will resize to match image dimensions.
+                          </p>
+                        </div>
+                      </div>
                     </TabsContent>
                     <TabsContent value="guests" className="mt-4">
                       <GuestList 
@@ -999,6 +1109,20 @@ const InvitationEditor = () => {
                     )}
                   </div>
                 </div>
+                
+                {/* Preview button */}
+                {guests.length > 0 && (
+                  <div className="flex justify-end mt-4">
+                    <Button
+                      variant="secondary"
+                      onClick={() => setShowPreview(true)}
+                      className="flex items-center gap-2"
+                    >
+                      <Eye className="h-4 w-4" />
+                      Preview Personalized Invitation
+                    </Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -1041,6 +1165,27 @@ const InvitationEditor = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      
+      {/* Preview dialog */}
+      <PreviewDialog
+        open={showPreview}
+        onOpenChange={setShowPreview}
+        fabricCanvas={fabricCanvas}
+        guest={guests[previewGuestIndex] || null}
+        onPrevious={() => handlePreviewNavigation('previous')}
+        onNext={() => handlePreviewNavigation('next')}
+        currentIndex={previewGuestIndex}
+        totalGuests={guests.length}
+      />
+      
+      {/* Resize Controls Dialog */}
+      <ResizeControls
+        open={showResizeControls}
+        onOpenChange={setShowResizeControls}
+        initialWidth={canvasSize.width}
+        initialHeight={canvasSize.height}
+        onResize={handleCanvasResize}
+      />
     </DashboardLayout>
   );
 };

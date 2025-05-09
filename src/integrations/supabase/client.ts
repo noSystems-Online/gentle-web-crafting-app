@@ -16,7 +16,16 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
   },
   global: {
     fetch: (...args) => {
-      // @ts-ignore
+      // Use a longer timeout for image uploads (5 minutes)
+      const fetchOptions = args[1] || {};
+      if (fetchOptions.method === 'POST' && 
+          (args[0] as string).includes('storage/')) {
+        return fetch(args[0] as string, {
+          ...fetchOptions,
+          signal: AbortSignal.timeout(300000), // 5 minute timeout for uploads
+        });
+      }
+      // Default fetch with standard timeout
       return fetch(...args);
     },
   },
