@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -37,6 +38,7 @@ const PreviewDialog: React.FC<PreviewDialogProps> = ({
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
   const [previewCanvas, setPreviewCanvas] = useState<fabric.Canvas | null>(null);
   const { toast } = useToast();
+  const previewContainerRef = useRef<HTMLDivElement>(null);
 
   // Cleanup function to dispose canvas when dialog closes or component unmounts
   useEffect(() => {
@@ -74,10 +76,10 @@ const PreviewDialog: React.FC<PreviewDialogProps> = ({
     
     setIsLoading(true);
     
-    // Use a small timeout to ensure DOM is ready
+    // Use a timeout to ensure DOM is ready
     const timer = setTimeout(() => {
       setupPreviewCanvas();
-    }, 100);
+    }, 200);
     
     return () => {
       clearTimeout(timer);
@@ -100,10 +102,12 @@ const PreviewDialog: React.FC<PreviewDialogProps> = ({
         }
       }
       
-      // Create a new fabric canvas
+      // Create a new fabric canvas in the container
+      const containerWidth = previewContainerRef.current?.clientWidth || fabricCanvas.getWidth();
+      
       const canvas = new fabric.Canvas(previewCanvasRef.current, {
-        width: fabricCanvas.getWidth(),
-        height: fabricCanvas.getHeight(),
+        width: containerWidth,
+        height: fabricCanvas.getHeight() * (containerWidth / fabricCanvas.getWidth()),
         selection: false,
         interactive: false
       });
@@ -118,10 +122,10 @@ const PreviewDialog: React.FC<PreviewDialogProps> = ({
       
       // Handle background image if present
       if (fabricCanvas.backgroundImage) {
-        const bgImage = fabricCanvas.backgroundImage;
-        
-        if ('src' in bgImage && typeof bgImage.src === 'string') {
-          await new Promise<void>((resolve) => {
+        await new Promise<void>((resolve) => {
+          const bgImage = fabricCanvas.backgroundImage as fabric.Image;
+          
+          if ('src' in bgImage && typeof bgImage.src === 'string') {
             fabric.Image.fromURL(bgImage.src, (img) => {
               canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas), {
                 scaleX: bgImage.scaleX || 1,
@@ -130,9 +134,11 @@ const PreviewDialog: React.FC<PreviewDialogProps> = ({
                 originY: 'top'
               });
               resolve();
-            });
-          });
-        }
+            }, { crossOrigin: 'anonymous' });
+          } else {
+            resolve();
+          }
+        });
       }
       
       // Load the objects
@@ -143,6 +149,7 @@ const PreviewDialog: React.FC<PreviewDialogProps> = ({
             const canvasObjects = canvas.getObjects();
             const qrCodePromises: Promise<void>[] = [];
             
+            // First process all text objects
             for (const obj of canvasObjects) {
               // Handle text objects with {guest_name} placeholder
               if ((obj.type === 'text' || obj.type === 'i-text') && obj instanceof fabric.Text) {
@@ -152,9 +159,13 @@ const PreviewDialog: React.FC<PreviewDialogProps> = ({
                 // Replace the placeholder with the actual guest name
                 if (originalText.includes('{guest_name}')) {
                   textObj.set('text', originalText.replace(/{guest_name}/g, guest.name));
+                  canvas.renderAll(); // Render after each text change
                 }
               }
-              
+            }
+            
+            // Then process QR codes
+            for (const obj of canvasObjects) {
               // Handle QR codes with {guest_name} placeholder in their template
               if (obj.type === 'image' && 'qrTemplate' in obj && typeof obj.qrTemplate === 'string') {
                 const qrObj = obj as fabric.Image & { qrTemplate: string };
@@ -162,7 +173,6 @@ const PreviewDialog: React.FC<PreviewDialogProps> = ({
                 
                 // If the QR code has a template with the placeholder
                 if (qrTemplate && qrTemplate.includes('{guest_name}')) {
-                  // Create a promise to update the QR code
                   const qrPromise = new Promise<void>((resolveQr) => {
                     // Replace the placeholder with the actual guest name
                     const personalized = qrTemplate.replace(/{guest_name}/g, guest.name);
@@ -171,22 +181,29 @@ const PreviewDialog: React.FC<PreviewDialogProps> = ({
                     const qrApiUrl = "https://api.qrserver.com/v1/create-qr-code/?data=" + 
                       encodeURIComponent(personalized) + "&size=200x200";
                     
-                    // Update the QR code image
+                    // Load the new QR code image
                     fabric.Image.fromURL(qrApiUrl, (newQrImage) => {
-                      // Keep the position, scale, etc. of the original QR code
+                      const qrLeft = qrObj.left || 0;
+                      const qrTop = qrObj.top || 0;
+                      const qrScaleX = qrObj.scaleX || 1;
+                      const qrScaleY = qrObj.scaleY || 1;
+                      const qrAngle = qrObj.angle || 0;
+                      
+                      // Remove the old QR code
+                      canvas.remove(qrObj);
+                      
+                      // Configure the new QR code with the same properties
                       newQrImage.set({
-                        left: qrObj.left,
-                        top: qrObj.top,
-                        scaleX: qrObj.scaleX,
-                        scaleY: qrObj.scaleY,
-                        angle: qrObj.angle,
+                        left: qrLeft,
+                        top: qrTop,
+                        scaleX: qrScaleX,
+                        scaleY: qrScaleY,
+                        angle: qrAngle,
                         qrTemplate: qrTemplate, // Keep the original template
                         crossOrigin: 'anonymous' // Add cross-origin attribute
                       });
                       
-                      // Instead of replacing the object (which can cause DOM issues),
-                      // modify its properties
-                      canvas.remove(qrObj);
+                      // Add the new QR code
                       canvas.add(newQrImage);
                       canvas.renderAll();
                       resolveQr();
@@ -199,13 +216,19 @@ const PreviewDialog: React.FC<PreviewDialogProps> = ({
             }
             
             // Wait for all QR code updates to complete
-            await Promise.all(qrCodePromises);
+            if (qrCodePromises.length > 0) {
+              await Promise.all(qrCodePromises);
+            }
           }
           
           canvas.renderAll();
           resolve();
         });
       });
+      
+      // Final render and finish loading
+      canvas.renderAll();
+      setIsLoading(false);
     } catch (err) {
       console.error('Error creating preview:', err);
       toast({
@@ -213,7 +236,6 @@ const PreviewDialog: React.FC<PreviewDialogProps> = ({
         description: "There was a problem generating the preview.",
         variant: "destructive"
       });
-    } finally {
       setIsLoading(false);
     }
   };
@@ -241,7 +263,7 @@ const PreviewDialog: React.FC<PreviewDialogProps> = ({
           <DialogTitle>Preview for {guest.name}</DialogTitle>
         </DialogHeader>
         
-        <div className="relative bg-gray-50 border rounded-md overflow-hidden">
+        <div className="relative bg-gray-50 border rounded-md overflow-hidden" ref={previewContainerRef}>
           {isLoading ? (
             <div className="flex items-center justify-center p-20">
               <Loader2 className="h-10 w-10 text-primary animate-spin" />
