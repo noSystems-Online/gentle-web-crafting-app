@@ -38,162 +38,204 @@ const PreviewDialog: React.FC<PreviewDialogProps> = ({
   const [previewCanvas, setPreviewCanvas] = useState<fabric.Canvas | null>(null);
   const { toast } = useToast();
 
-  // Clean up on unmount
+  // Cleanup function to dispose canvas when dialog closes or component unmounts
   useEffect(() => {
     return () => {
       if (previewCanvas) {
-        previewCanvas.dispose();
+        try {
+          previewCanvas.dispose();
+          setPreviewCanvas(null);
+        } catch (error) {
+          console.error("Error disposing canvas:", error);
+        }
       }
     };
   }, []);
 
-  // Create preview canvas when dialog opens and update when guest changes
+  // Effect that runs when dialog opens/closes or guest changes
   useEffect(() => {
-    if (!open || !fabricCanvas) return;
+    // Clean up previous canvas when dialog closes
+    if (!open) {
+      if (previewCanvas) {
+        try {
+          previewCanvas.dispose();
+          setPreviewCanvas(null);
+        } catch (error) {
+          console.error("Error disposing canvas on close:", error);
+        }
+      }
+      return;
+    }
+
+    // Don't proceed if we don't have required data
+    if (!fabricCanvas || !guest) {
+      return;
+    }
     
     setIsLoading(true);
     
-    const setupPreviewCanvas = async () => {
-      try {
-        // Only create a new canvas if one doesn't exist
-        let canvas = previewCanvas;
-        if (!canvas && previewCanvasRef.current) {
-          canvas = new fabric.Canvas(previewCanvasRef.current, {
-            width: fabricCanvas.getWidth(),
-            height: fabricCanvas.getHeight(),
-            selection: false,
-            interactive: false
-          });
-          setPreviewCanvas(canvas);
+    // Use a small timeout to ensure DOM is ready
+    const timer = setTimeout(() => {
+      setupPreviewCanvas();
+    }, 100);
+    
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [open, guest?.id, fabricCanvas]);
+
+  const setupPreviewCanvas = async () => {
+    try {
+      if (!fabricCanvas || !previewCanvasRef.current || !open) {
+        setIsLoading(false);
+        return;
+      }
+      
+      // Dispose of any existing canvas first
+      if (previewCanvas) {
+        try {
+          previewCanvas.dispose();
+        } catch (error) {
+          console.error("Error disposing existing canvas:", error);
         }
+      }
+      
+      // Create a new fabric canvas
+      const canvas = new fabric.Canvas(previewCanvasRef.current, {
+        width: fabricCanvas.getWidth(),
+        height: fabricCanvas.getHeight(),
+        selection: false,
+        interactive: false
+      });
+      
+      setPreviewCanvas(canvas);
+      
+      // Clone the canvas content
+      const originalJson = fabricCanvas.toJSON();
+      
+      // Set background color
+      canvas.backgroundColor = fabricCanvas.backgroundColor;
+      
+      // Handle background image if present
+      if (fabricCanvas.backgroundImage) {
+        const bgImage = fabricCanvas.backgroundImage;
         
-        if (!canvas) return;
-        
-        // Ensure preview canvas has same dimensions as original
-        canvas.setDimensions({
-          width: fabricCanvas.getWidth(),
-          height: fabricCanvas.getHeight()
-        });
-        
-        // Clone the canvas
-        const originalJson = fabricCanvas.toJSON();
-        canvas.clear();
-        
-        // Set background
-        canvas.backgroundColor = fabricCanvas.backgroundColor;
-        
-        // Handle background image if present
-        if (fabricCanvas.backgroundImage) {
-          const bgImage = fabricCanvas.backgroundImage;
-          
-          if ('src' in bgImage && typeof bgImage.src === 'string') {
-            await new Promise<void>((resolve) => {
-              fabric.Image.fromURL(bgImage.src, (img) => {
-                canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas), {
-                  scaleX: bgImage.scaleX || 1,
-                  scaleY: bgImage.scaleY || 1,
-                  originX: 'left',
-                  originY: 'top'
-                });
-                resolve();
+        if ('src' in bgImage && typeof bgImage.src === 'string') {
+          await new Promise<void>((resolve) => {
+            fabric.Image.fromURL(bgImage.src, (img) => {
+              canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas), {
+                scaleX: bgImage.scaleX || 1,
+                scaleY: bgImage.scaleY || 1,
+                originX: 'left',
+                originY: 'top'
               });
+              resolve();
             });
-          }
+          });
         }
-        
-        // Load the objects
-        await new Promise<void>((resolve) => {
-          canvas.loadFromJSON(originalJson, async () => {
-            // Replace placeholders with guest data if a guest is selected
-            if (guest) {
-              const canvasObjects = canvas.getObjects();
-              const qrCodePromises: Promise<void>[] = [];
-              
-              canvasObjects.forEach((obj) => {
-                // Handle text objects with {guest_name} placeholder
-                if ((obj.type === 'text' || obj.type === 'i-text') && obj instanceof fabric.Text) {
-                  const textObj = obj;
-                  const originalText = textObj.text || '';
-                  
-                  // Replace the placeholder with the actual guest name
-                  if (originalText.includes('{guest_name}')) {
-                    textObj.set('text', originalText.replace(/{guest_name}/g, guest.name));
-                  }
-                }
+      }
+      
+      // Load the objects
+      await new Promise<void>((resolve) => {
+        canvas.loadFromJSON(originalJson, async () => {
+          // Replace placeholders with guest data
+          if (guest) {
+            const canvasObjects = canvas.getObjects();
+            const qrCodePromises: Promise<void>[] = [];
+            
+            for (const obj of canvasObjects) {
+              // Handle text objects with {guest_name} placeholder
+              if ((obj.type === 'text' || obj.type === 'i-text') && obj instanceof fabric.Text) {
+                const textObj = obj;
+                const originalText = textObj.text || '';
                 
-                // Handle QR codes with {guest_name} placeholder in their template
-                if (obj.type === 'image' && 'qrTemplate' in obj && typeof obj.qrTemplate === 'string') {
-                  const qrObj = obj as fabric.Image & { qrTemplate: string };
-                  const qrTemplate = qrObj.qrTemplate;
-                  
-                  // If the QR code has a template with the placeholder
-                  if (qrTemplate && qrTemplate.includes('{guest_name}')) {
-                    // Create a promise to update the QR code
-                    const qrPromise = new Promise<void>((resolveQr) => {
-                      // Replace the placeholder with the actual guest name
-                      const personalized = qrTemplate.replace(/{guest_name}/g, guest.name);
-                      
-                      // Generate a new QR code URL with the personalized data
-                      const qrApiUrl = "https://api.qrserver.com/v1/create-qr-code/?data=" + 
-                        encodeURIComponent(personalized) + "&size=200x200";
-                      
-                      // Update the QR code image
-                      fabric.Image.fromURL(qrApiUrl, (newQrImage) => {
-                        // Keep the position, scale, etc. of the original QR code
-                        newQrImage.set({
-                          left: qrObj.left,
-                          top: qrObj.top,
-                          scaleX: qrObj.scaleX,
-                          scaleY: qrObj.scaleY,
-                          angle: qrObj.angle,
-                          qrTemplate: qrTemplate, // Keep the original template
-                          crossOrigin: 'anonymous' // Add cross-origin attribute
-                        });
-                        
-                        // Replace the old QR code with the new one
-                        const index = canvas.getObjects().indexOf(qrObj);
-                        canvas.remove(qrObj);
-                        canvas.insertAt(newQrImage, index);
-                        canvas.renderAll();
-                        resolveQr();
-                      }, { crossOrigin: 'anonymous' });
-                    });
-                    
-                    qrCodePromises.push(qrPromise);
-                  }
+                // Replace the placeholder with the actual guest name
+                if (originalText.includes('{guest_name}')) {
+                  textObj.set('text', originalText.replace(/{guest_name}/g, guest.name));
                 }
-              });
+              }
               
-              // Wait for all QR code updates to complete
-              await Promise.all(qrCodePromises);
+              // Handle QR codes with {guest_name} placeholder in their template
+              if (obj.type === 'image' && 'qrTemplate' in obj && typeof obj.qrTemplate === 'string') {
+                const qrObj = obj as fabric.Image & { qrTemplate: string };
+                const qrTemplate = qrObj.qrTemplate;
+                
+                // If the QR code has a template with the placeholder
+                if (qrTemplate && qrTemplate.includes('{guest_name}')) {
+                  // Create a promise to update the QR code
+                  const qrPromise = new Promise<void>((resolveQr) => {
+                    // Replace the placeholder with the actual guest name
+                    const personalized = qrTemplate.replace(/{guest_name}/g, guest.name);
+                    
+                    // Generate a new QR code URL with the personalized data
+                    const qrApiUrl = "https://api.qrserver.com/v1/create-qr-code/?data=" + 
+                      encodeURIComponent(personalized) + "&size=200x200";
+                    
+                    // Update the QR code image
+                    fabric.Image.fromURL(qrApiUrl, (newQrImage) => {
+                      // Keep the position, scale, etc. of the original QR code
+                      newQrImage.set({
+                        left: qrObj.left,
+                        top: qrObj.top,
+                        scaleX: qrObj.scaleX,
+                        scaleY: qrObj.scaleY,
+                        angle: qrObj.angle,
+                        qrTemplate: qrTemplate, // Keep the original template
+                        crossOrigin: 'anonymous' // Add cross-origin attribute
+                      });
+                      
+                      // Instead of replacing the object (which can cause DOM issues),
+                      // modify its properties
+                      canvas.remove(qrObj);
+                      canvas.add(newQrImage);
+                      canvas.renderAll();
+                      resolveQr();
+                    }, { crossOrigin: 'anonymous' });
+                  });
+                  
+                  qrCodePromises.push(qrPromise);
+                }
+              }
             }
             
-            canvas.renderAll();
-            resolve();
-          });
+            // Wait for all QR code updates to complete
+            await Promise.all(qrCodePromises);
+          }
+          
+          canvas.renderAll();
+          resolve();
         });
-      } catch (err) {
-        console.error('Error creating preview:', err);
-        toast({
-          title: "Preview Error",
-          description: "There was a problem generating the preview.",
-          variant: "destructive"
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    
-    setupPreviewCanvas();
-    
-  }, [open, fabricCanvas, guest, previewCanvas]);
+      });
+    } catch (err) {
+      console.error('Error creating preview:', err);
+      toast({
+        title: "Preview Error",
+        description: "There was a problem generating the preview.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
   
+  // Show nothing if no guest is selected
   if (!guest) {
     return null;
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(newOpen) => {
+      // Clean up before closing
+      if (!newOpen && previewCanvas) {
+        try {
+          previewCanvas.dispose();
+          setPreviewCanvas(null);
+        } catch (error) {
+          console.error("Error disposing canvas on close:", error);
+        }
+      }
+      onOpenChange(newOpen);
+    }}>
       <DialogContent className="sm:max-w-4xl">
         <DialogHeader>
           <DialogTitle>Preview for {guest.name}</DialogTitle>
@@ -205,7 +247,9 @@ const PreviewDialog: React.FC<PreviewDialogProps> = ({
               <Loader2 className="h-10 w-10 text-primary animate-spin" />
             </div>
           ) : (
-            <canvas ref={previewCanvasRef} className="w-full" />
+            <div className="canvas-container">
+              <canvas ref={previewCanvasRef} className="w-full" />
+            </div>
           )}
         </div>
         
