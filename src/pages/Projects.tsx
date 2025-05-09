@@ -6,11 +6,27 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import DashboardLayout from '@/layouts/DashboardLayout';
 import { useFeatureAccess } from '@/hooks/use-feature-access';
-import { Plus, Folder, AlertCircle, Mail, Loader2 } from 'lucide-react';
+import { Plus, Folder, AlertCircle, Mail, Loader2, Trash2, MoreHorizontal } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
+import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuItem, 
+  DropdownMenuTrigger 
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface Project {
   id: string;
@@ -31,10 +47,21 @@ const Projects: React.FC = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const { checkAccess, checkLimit } = useFeatureAccess();
   const { toast } = useToast();
   const navigate = useNavigate();
   const { user } = useAuth();
+  
+  // For delete confirmation
+  const [invitationToDelete, setInvitationToDelete] = useState<Invitation | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // For pagination
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const pageSize = 5;
   
   // Mock project data - we'll keep this for now
   const mockProjects = [
@@ -56,20 +83,40 @@ const Projects: React.FC = () => {
     }
   }, [user]);
 
-  const fetchInvitations = async () => {
-    setIsLoading(true);
+  const fetchInvitations = async (resetPage = true) => {
+    if (resetPage) {
+      setIsLoading(true);
+      setPage(0);
+    } else {
+      setIsLoadingMore(true);
+    }
+    
+    const currentPage = resetPage ? 0 : page;
+    
     try {
       // Fetch with pagination and simple ordering to avoid large JSON responses
       const { data, error } = await supabase
         .from('invitations')
-        .select('id, title, created_at, status') // Only select needed fields
+        .select('id, title, created_at, status') 
         .eq('user_id', user?.id)
         .order('created_at', { ascending: false })
-        .limit(20); // Limit to a reasonable number of records
+        .range(currentPage * pageSize, (currentPage * pageSize) + pageSize - 1);
 
       if (error) throw error;
       
-      setInvitations(data || []);
+      // If we got fewer results than the page size, there are no more to load
+      if (data && data.length < pageSize) {
+        setHasMore(false);
+      } else {
+        setHasMore(true);
+      }
+      
+      if (resetPage) {
+        setInvitations(data || []);
+      } else {
+        setInvitations(prev => [...prev, ...(data || [])]);
+        setPage(prev => prev + 1);
+      }
     } catch (error) {
       console.error('Error fetching invitations:', error);
       toast({
@@ -79,7 +126,12 @@ const Projects: React.FC = () => {
       });
     } finally {
       setIsLoading(false);
+      setIsLoadingMore(false);
     }
+  };
+
+  const handleLoadMore = () => {
+    fetchInvitations(false);
   };
 
   const handleCreateProject = () => {
@@ -121,6 +173,48 @@ const Projects: React.FC = () => {
     navigate('/invitation/new');
   };
 
+  const handleDeleteInvitation = async () => {
+    if (!invitationToDelete) return;
+    
+    setIsDeleting(true);
+    try {
+      // Delete the invitation
+      const { error } = await supabase
+        .from('invitations')
+        .delete()
+        .eq('id', invitationToDelete.id);
+        
+      if (error) throw error;
+      
+      // Also delete any guests associated with this invitation
+      await supabase
+        .from('guests')
+        .delete()
+        .eq('invitation_id', invitationToDelete.id);
+      
+      // Remove from local state
+      setInvitations(invitations.filter(inv => inv.id !== invitationToDelete.id));
+      
+      toast({
+        title: "Invitation deleted",
+        description: `"${invitationToDelete.title}" has been deleted successfully.`,
+      });
+      
+      // Close the dialog
+      setIsDeleteDialogOpen(false);
+      setInvitationToDelete(null);
+    } catch (error) {
+      console.error("Error deleting invitation:", error);
+      toast({
+        title: "Delete failed",
+        description: "There was an error deleting the invitation. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const getStatusBadgeClass = (status: string) => {
     switch (status) {
       case 'draft':
@@ -156,36 +250,84 @@ const Projects: React.FC = () => {
         ) : (
           <>
             {invitations.length > 0 ? (
-              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {invitations.map((invitation) => (
-                  <Card key={invitation.id}>
-                    <CardHeader>
-                      <CardTitle className="flex items-center">
-                        <Mail className="h-5 w-5 mr-2 text-primary" />
-                        {invitation.title}
-                      </CardTitle>
-                      <CardDescription>
-                        Created on {new Date(invitation.created_at).toLocaleDateString()}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="flex items-center">
-                        <span className={`text-xs px-2 py-1 rounded-full ${getStatusBadgeClass(invitation.status)}`}>
-                          {invitation.status.charAt(0).toUpperCase() + invitation.status.slice(1)}
-                        </span>
-                      </div>
-                    </CardContent>
-                    <CardFooter className="flex gap-2">
-                      <Button size="sm" variant="outline" asChild className="flex-1">
-                        <Link to={`/invitation/edit/${invitation.id}`}>Edit</Link>
-                      </Button>
-                      <Button size="sm" variant="secondary" className="flex-1">
-                        Preview
-                      </Button>
-                    </CardFooter>
-                  </Card>
-                ))}
-              </div>
+              <>
+                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                  {invitations.map((invitation) => (
+                    <Card key={invitation.id}>
+                      <CardHeader>
+                        <div className="flex justify-between items-start">
+                          <CardTitle className="flex items-center">
+                            <Mail className="h-5 w-5 mr-2 text-primary" />
+                            {invitation.title}
+                          </CardTitle>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" className="h-8 w-8 p-0" title="More options">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem asChild>
+                                <Link to={`/invitation/edit/${invitation.id}`} className="cursor-pointer">
+                                  Edit
+                                </Link>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem 
+                                className="text-red-600 focus:text-red-600 cursor-pointer"
+                                onClick={() => {
+                                  setInvitationToDelete(invitation);
+                                  setIsDeleteDialogOpen(true);
+                                }}
+                              >
+                                Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                        <CardDescription>
+                          Created on {new Date(invitation.created_at).toLocaleDateString()}
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="flex items-center">
+                          <span className={`text-xs px-2 py-1 rounded-full ${getStatusBadgeClass(invitation.status)}`}>
+                            {invitation.status.charAt(0).toUpperCase() + invitation.status.slice(1)}
+                          </span>
+                        </div>
+                      </CardContent>
+                      <CardFooter className="flex gap-2">
+                        <Button size="sm" variant="outline" asChild className="flex-1">
+                          <Link to={`/invitation/edit/${invitation.id}`}>Edit</Link>
+                        </Button>
+                        <Button size="sm" variant="secondary" className="flex-1">
+                          Preview
+                        </Button>
+                      </CardFooter>
+                    </Card>
+                  ))}
+                </div>
+                
+                {/* Load more button */}
+                {hasMore && (
+                  <div className="flex justify-center mt-6">
+                    <Button 
+                      variant="outline" 
+                      onClick={handleLoadMore} 
+                      disabled={isLoadingMore}
+                      className="min-w-[150px]"
+                    >
+                      {isLoadingMore ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Loading...
+                        </>
+                      ) : (
+                        "Load More"
+                      )}
+                    </Button>
+                  </div>
+                )}
+              </>
             ) : (
               <Card className="border-dashed border-2 border-muted-foreground/20">
                 <CardContent className="p-6 text-center">
@@ -312,6 +454,38 @@ const Projects: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Delete Invitation Confirmation Dialog */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete "{invitationToDelete?.title}" and all associated guest data. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleDeleteInvitation}
+              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+              disabled={isDeleting}
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DashboardLayout>
   );
 };

@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { fabric } from 'fabric';
@@ -86,6 +87,12 @@ const InvitationEditor = () => {
   
   // Add a new loading state specifically for the canvas loading process
   const [isCanvasLoading, setIsCanvasLoading] = useState(true);
+
+  // Auto-save timer reference
+  const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Track if changes have been made that need saving
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   
   // Generate a temporary ID for new invitations
   useEffect(() => {
@@ -110,12 +117,21 @@ const InvitationEditor = () => {
     canvas.on('selection:created', (e) => handleSelectionChange(e));
     canvas.on('selection:updated', (e) => handleSelectionChange(e));
     canvas.on('selection:cleared', () => setActiveObject(null));
+    
+    // Track canvas changes for auto-save
+    canvas.on('object:modified', () => setHasUnsavedChanges(true));
+    canvas.on('object:added', () => setHasUnsavedChanges(true));
+    canvas.on('object:removed', () => setHasUnsavedChanges(true));
 
     setFabricCanvas(canvas);
 
     // We set canvas first before loading invitation
     return () => {
       canvas.dispose();
+      // Clear any pending auto-save when component unmounts
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+      }
     };
   }, []);
 
@@ -135,6 +151,48 @@ const InvitationEditor = () => {
       fetchGuests();
     }
   }, [effectiveId, user]);
+  
+  // Auto-save effect
+  useEffect(() => {
+    // Only set up auto-save if we have changes to save
+    if (hasUnsavedChanges && fabricCanvas && user && effectiveId) {
+      // Clear any existing timer
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+      }
+      
+      // Set up a new timer for 3 seconds
+      autoSaveTimerRef.current = setTimeout(() => {
+        saveInvitation(true);  // true indicates it's an auto-save
+      }, 3000); // Auto-save after 3 seconds of inactivity
+    }
+    
+    return () => {
+      // Clear timer on cleanup
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+      }
+    };
+  }, [hasUnsavedChanges, invitationTitle, description, replyToEmail, senderName, fabricCanvas, user, effectiveId]);
+
+  // Track input field changes
+  const handleInputChange = (field: string, value: string) => {
+    switch (field) {
+      case 'title':
+        setInvitationTitle(value);
+        break;
+      case 'description':
+        setDescription(value);
+        break;
+      case 'replyToEmail':
+        setReplyToEmail(value);
+        break;
+      case 'senderName':
+        setSenderName(value);
+        break;
+    }
+    setHasUnsavedChanges(true);
+  };
   
   // Fetch the current guest count
   const fetchGuestCount = async () => {
@@ -317,7 +375,7 @@ const InvitationEditor = () => {
   };
 
   // Save invitation
-  const saveInvitation = async () => {
+  const saveInvitation = async (isAutoSave: boolean = false) => {
     if (!fabricCanvas || !user) {
       if (!user) {
         toast({
@@ -329,7 +387,9 @@ const InvitationEditor = () => {
       return;
     }
 
-    setIsSaving(true);
+    if (!isAutoSave) {
+      setIsSaving(true);
+    }
 
     try {
       const canvasData = fabricCanvas.toJSON();
@@ -369,10 +429,16 @@ const InvitationEditor = () => {
 
       if (result.error) throw result.error;
       
-      toast({
-        title: "Invitation Saved",
-        description: "Your invitation has been saved successfully.",
-      });
+      // Only show toast for manual saves
+      if (!isAutoSave) {
+        toast({
+          title: "Invitation Saved",
+          description: "Your invitation has been saved successfully.",
+        });
+      }
+      
+      // Reset unsaved changes flag
+      setHasUnsavedChanges(false);
       
       if (!id && result.data) {
         navigate(`/invitation/edit/${result.data[0].id}`);
@@ -385,7 +451,9 @@ const InvitationEditor = () => {
         variant: "destructive",
       });
     } finally {
-      setIsSaving(false);
+      if (!isAutoSave) {
+        setIsSaving(false);
+      }
     }
   };
 
@@ -759,10 +827,10 @@ const InvitationEditor = () => {
               Cancel
             </Button>
             <Button
-              onClick={saveInvitation}
-              disabled={isSaving || !user}
+              onClick={() => saveInvitation(false)}
+              disabled={isSaving || !user || !hasUnsavedChanges}
             >
-              {isSaving ? 'Saving...' : 'Save Invitation'}
+              {isSaving ? 'Saving...' : hasUnsavedChanges ? 'Save Changes' : 'Saved'}
             </Button>
           </div>
         </div>
@@ -778,7 +846,7 @@ const InvitationEditor = () => {
                     <Input
                       id="title"
                       value={invitationTitle}
-                      onChange={(e) => setInvitationTitle(e.target.value)}
+                      onChange={(e) => handleInputChange('title', e.target.value)}
                       placeholder="Enter a title for your invitation"
                     />
                   </div>
@@ -788,7 +856,7 @@ const InvitationEditor = () => {
                     <Textarea
                       id="description"
                       value={description}
-                      onChange={(e) => setDescription(e.target.value)}
+                      onChange={(e) => handleInputChange('description', e.target.value)}
                       placeholder="Enter a description"
                       className="min-h-20"
                     />
@@ -802,7 +870,7 @@ const InvitationEditor = () => {
                     <Input
                       id="senderName"
                       value={senderName}
-                      onChange={(e) => setSenderName(e.target.value)}
+                      onChange={(e) => handleInputChange('senderName', e.target.value)}
                       placeholder="Your Name or Organization"
                       className="mt-1"
                     />
@@ -820,7 +888,7 @@ const InvitationEditor = () => {
                       id="replyToEmail"
                       type="email"
                       value={replyToEmail}
-                      onChange={(e) => setReplyToEmail(e.target.value)}
+                      onChange={(e) => handleInputChange('replyToEmail', e.target.value)}
                       placeholder="guests-can-reply@example.com"
                       className="mt-1"
                     />
@@ -907,6 +975,16 @@ const InvitationEditor = () => {
                         <div className="bg-amber-100 border border-amber-300 p-2 rounded-md flex items-center gap-2 text-sm">
                           <AlertCircle className="h-4 w-4 text-amber-500" />
                           <span>Login to save your work</span>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Auto-save indicator */}
+                    {user && hasUnsavedChanges && (
+                      <div className="absolute top-2 right-2">
+                        <div className="bg-blue-100 border border-blue-300 p-2 rounded-md flex items-center gap-2 text-sm">
+                          <Loader2 className="h-4 w-4 text-blue-500 animate-spin" />
+                          <span>Auto-saving...</span>
                         </div>
                       </div>
                     )}
