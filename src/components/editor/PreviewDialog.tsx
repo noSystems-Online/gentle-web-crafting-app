@@ -39,6 +39,7 @@ const PreviewDialog: React.FC<PreviewDialogProps> = ({
   const [previewCanvas, setPreviewCanvas] = useState<fabric.Canvas | null>(null);
   const { toast } = useToast();
   const previewContainerRef = useRef<HTMLDivElement>(null);
+  const [renderComplete, setRenderComplete] = useState(false);
 
   // Cleanup function to dispose canvas when dialog closes or component unmounts
   useEffect(() => {
@@ -62,6 +63,7 @@ const PreviewDialog: React.FC<PreviewDialogProps> = ({
         try {
           previewCanvas.dispose();
           setPreviewCanvas(null);
+          setRenderComplete(false);
         } catch (error) {
           console.error("Error disposing canvas on close:", error);
         }
@@ -75,11 +77,12 @@ const PreviewDialog: React.FC<PreviewDialogProps> = ({
     }
     
     setIsLoading(true);
+    setRenderComplete(false);
     
     // Use a timeout to ensure DOM is ready
     const timer = setTimeout(() => {
       setupPreviewCanvas();
-    }, 200);
+    }, 300); // Increased timeout for better DOM preparation
     
     return () => {
       clearTimeout(timer);
@@ -88,7 +91,7 @@ const PreviewDialog: React.FC<PreviewDialogProps> = ({
 
   const setupPreviewCanvas = async () => {
     try {
-      if (!fabricCanvas || !previewCanvasRef.current || !open) {
+      if (!fabricCanvas || !previewCanvasRef.current || !open || !guest) {
         setIsLoading(false);
         return;
       }
@@ -228,7 +231,13 @@ const PreviewDialog: React.FC<PreviewDialogProps> = ({
       
       // Final render and finish loading
       canvas.renderAll();
-      setIsLoading(false);
+      
+      // Add a slight delay to ensure everything is rendered properly
+      setTimeout(() => {
+        setIsLoading(false);
+        setRenderComplete(true);
+      }, 500);
+      
     } catch (err) {
       console.error('Error creating preview:', err);
       toast({
@@ -247,11 +256,17 @@ const PreviewDialog: React.FC<PreviewDialogProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={(newOpen) => {
+      // Only allow closing if rendering is complete or there was an error (isLoading is false)
+      if (newOpen === false && isLoading) {
+        return; // Prevent closing while loading
+      }
+      
       // Clean up before closing
       if (!newOpen && previewCanvas) {
         try {
           previewCanvas.dispose();
           setPreviewCanvas(null);
+          setRenderComplete(false);
         } catch (error) {
           console.error("Error disposing canvas on close:", error);
         }
@@ -267,6 +282,7 @@ const PreviewDialog: React.FC<PreviewDialogProps> = ({
           {isLoading ? (
             <div className="flex items-center justify-center p-20">
               <Loader2 className="h-10 w-10 text-primary animate-spin" />
+              <span className="ml-2">Generating preview...</span>
             </div>
           ) : (
             <div className="canvas-container">

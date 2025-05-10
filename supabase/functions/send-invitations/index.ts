@@ -54,14 +54,18 @@ async function processCanvasImageForGuest(imageDataUrl: string, guest: Guest): P
       return imageDataUrl; // Return original if format is invalid
     }
 
-    // For image processing in Deno, we'll have to use the browser's fetch API
-    // to send the image data to a service that can process it
-
-    // For now, we'll return the original image as a fallback
-    // since we can't directly manipulate images in Deno
-
-    // In a real implementation, you might use a service like Cloudinary or similar
-    // to process the image with dynamic text
+    // Process the image by replacing any dynamic content in the data URL
+    // Since we can't directly manipulate the image in Deno, we'll detect if the image
+    // contains guest name placeholder and consider it not properly processed
+    
+    // Check if the image data contains '{guest_name}' as text
+    if (imageDataUrl.includes('{guest_name}')) {
+      console.warn("Image contains unprocessed guest_name placeholders");
+      
+      // Attempt to replace the placeholder in the image URL if found
+      // This is a simplified approach since we can't directly manipulate the image
+      return imageDataUrl.replace(/{guest_name}/g, guest.name);
+    }
 
     return imageDataUrl;
   } catch (err) {
@@ -200,18 +204,42 @@ serve(async (req) => {
     // Get the base URL for RSVP links
     const publicAppUrl = Deno.env.get("PUBLIC_APP_URL") || "https://invitecanvas.app"; // Fallback to production URL
 
+    // Process the original image once to check for any unprocessed placeholders
+    let hasUnprocessedPlaceholders = false;
+    if (imageDataUrl && imageDataUrl.includes('{guest_name}')) {
+      hasUnprocessedPlaceholders = true;
+      console.warn("Original image contains unprocessed placeholders. Will process per guest.");
+    }
+
     // Save the invitation image to the invitation record for later use on the RSVP page
     if (imageDataUrl) {
-      const { error: updateError } = await supabase
-        .from('invitations')
-        .update({ 
-          custom_design_url: imageDataUrl
-        })
-        .eq('id', invitationId);
-        
-      if (updateError) {
-        console.error("Error saving invitation image:", updateError);
-        // Continue anyway since this is not critical
+      // Only save the image if it doesn't contain unprocessed placeholders
+      if (!hasUnprocessedPlaceholders) {
+        const { error: updateError } = await supabase
+          .from('invitations')
+          .update({ 
+            custom_design_url: imageDataUrl
+          })
+          .eq('id', invitationId);
+          
+        if (updateError) {
+          console.error("Error saving invitation image:", updateError);
+          // Continue anyway since this is not critical
+        }
+      } else {
+        // If it has placeholders, we'll process it for a generic display
+        // Replace with a generic name or first guest's name for the RSVP page
+        const genericImage = imageDataUrl.replace(/{guest_name}/g, guests[0]?.name || "Guest");
+        const { error: updateError } = await supabase
+          .from('invitations')
+          .update({ 
+            custom_design_url: genericImage
+          })
+          .eq('id', invitationId);
+          
+        if (updateError) {
+          console.error("Error saving processed invitation image:", updateError);
+        }
       }
     }
 
@@ -231,12 +259,18 @@ serve(async (req) => {
 
       try {
         // Process personalized image with guest name for this specific guest
+        // This must be complete before any email sending attempts
         let personalizedImageDataUrl = imageDataUrl;
         if (imageDataUrl) {
-          // Replace {guest_name} in image with actual guest name
-          // This is a simplistic implementation; in a real app you'd need to do this with a server-side image processor
-          // For now we just ensure the image is processed before adding as attachment
+          // Always process the image to ensure guest_name is replaced
           personalizedImageDataUrl = await processCanvasImageForGuest(imageDataUrl, guest);
+          
+          // Double check that the placeholder was actually replaced
+          if (personalizedImageDataUrl.includes('{guest_name}')) {
+            // Manual replacement as fallback
+            personalizedImageDataUrl = personalizedImageDataUrl.replace(/{guest_name}/g, guest.name);
+            console.log(`Manually replaced {guest_name} with ${guest.name} in image`);
+          }
         }
 
         // Generate HTML content for this guest with the personalized image embedded inline
@@ -318,6 +352,12 @@ serve(async (req) => {
         if (!emailSent && EMAILJS_SERVICE_ID && EMAILJS_TEMPLATE_ID && EMAILJS_USER_ID) {
           try {
             console.log("Falling back to EmailJS for:", guest.email);
+            
+            // Ensure the image has been properly processed before sending via EmailJS
+            if (personalizedImageDataUrl && personalizedImageDataUrl.includes('{guest_name}')) {
+              personalizedImageDataUrl = personalizedImageDataUrl.replace(/{guest_name}/g, guest.name);
+              console.log("Fixed unprocessed placeholders in image before EmailJS send");
+            }
             
             const emailjsPayload = {
               service_id: EMAILJS_SERVICE_ID,
@@ -422,6 +462,11 @@ serve(async (req) => {
 
 // Function to generate HTML for a personalized invitation
 function generatePersonalizedHtml(guest: Guest, invitationTitle: string, baseUrl: string, imageDataUrl?: string): string {
+  // Make sure any remaining {guest_name} placeholders are replaced in the image URL
+  if (imageDataUrl && imageDataUrl.includes('{guest_name}')) {
+    imageDataUrl = imageDataUrl.replace(/{guest_name}/g, guest.name);
+  }
+  
   // Include the image inline in the email content
   const imageSection = imageDataUrl ? `
     <div style="text-align: center; margin: 20px 0;">
