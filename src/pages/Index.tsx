@@ -1,4 +1,3 @@
-
 import React from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -14,13 +13,16 @@ const Index: React.FC = () => {
           <div className="flex flex-col items-center justify-center space-y-4 text-center">
             <div className="space-y-2">
               <h1 className="text-3xl font-bold tracking-tighter sm:text-5xl xl:text-6xl/none">
-                The SaaS Platform for
+                The Invitation App for
                 <span className="text-primary"> Your Business</span>
               </h1>
-              <p className="max-w-[600px] text-muted-foreground md:text-xl">
-                Subscribe to our platform and access premium features to grow your business.
-                Start today with our flexible subscription plans.
-              </p>
+              <div className="flex justify-center">
+                <p className="max-w-[600px] text-muted-foreground md:text-xl">
+                  Subscribe to our platform and access premium features to grow
+                  your business. Start today with our flexible subscription
+                  plans.
+                </p>
+              </div>
             </div>
             <div className="flex flex-col gap-2 min-[400px]:flex-row justify-center">
               <Button size="lg" asChild>
@@ -43,7 +45,8 @@ const Index: React.FC = () => {
                 Key Features
               </h2>
               <p className="max-w-[600px] mx-auto text-muted-foreground">
-                Our platform offers powerful features to help your business succeed.
+                Our platform offers powerful features to help your business
+                succeed.
               </p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -134,7 +137,8 @@ const Index: React.FC = () => {
                 Simple, Transparent Pricing
               </h2>
               <p className="max-w-[600px] mx-auto text-muted-foreground">
-                Choose a plan that's right for your business. All plans come with a 14-day money-back guarantee.
+                Choose a plan that's right for your business. All plans come
+                with a 14-day money-back guarantee.
               </p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -247,7 +251,8 @@ const Index: React.FC = () => {
                 Ready to get started?
               </h2>
               <p className="max-w-[600px] mx-auto text-muted-foreground">
-                Join thousands of businesses that use our platform to scale their operations.
+                Join thousands of businesses that use our platform to scale
+                their operations.
               </p>
             </div>
             <div className="flex flex-col gap-2 min-[400px]:flex-row">

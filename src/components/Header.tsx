@@ -1,4 +1,3 @@
-
 import React from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -11,16 +10,16 @@ const Header: React.FC = () => {
   return (
     <header className="w-full border-b bg-background">
       <div className="container flex h-16 items-center justify-between px-4 md:px-6">
-        <Link 
-          to="/" 
+        <Link
+          to="/"
           className="text-xl font-bold text-primary flex items-center gap-2"
         >
           <div className="rounded-full bg-primary text-white p-1">
             <User className="h-5 w-5" />
           </div>
-          SaaS Platform
+          Vytely
         </Link>
-        
+
         <nav className="hidden md:flex items-center gap-6 text-sm font-medium">
           <Link
             to="/"
@@ -41,7 +40,7 @@ const Header: React.FC = () => {
             Pricing
           </Link>
         </nav>
-        
+
         <div className="flex items-center gap-4">
           {user ? (
             <div className="flex items-center gap-4">

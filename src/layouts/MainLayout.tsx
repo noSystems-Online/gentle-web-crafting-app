@@ -1,4 +1,3 @@
-
 import React, { ReactNode } from "react";
 import Header from "@/components/Header";
 
@@ -14,7 +13,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
       <footer className="py-6 border-t">
         <div className="container mx-auto px-4 md:px-6">
           <p className="text-center text-sm text-muted-foreground">
-            © {new Date().getFullYear()} SaaS Platform. All rights reserved.
+            © {new Date().getFullYear()} Vytely. All rights reserved.
           </p>
         </div>
       </footer>

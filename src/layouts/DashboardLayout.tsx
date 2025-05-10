@@ -1,10 +1,22 @@
-
-import React from 'react';
-import { useNavigate } from 'react-router-dom';
-import { SidebarProvider, Sidebar, SidebarContent, SidebarTrigger } from '@/components/ui/sidebar';
-import { Button } from '@/components/ui/button';
-import { useAuth } from '@/context/AuthContext';
-import { User, LogOut, CreditCard, Settings, LayoutDashboard, Users, FolderKanban } from 'lucide-react';
+import React from "react";
+import { useNavigate } from "react-router-dom";
+import {
+  SidebarProvider,
+  Sidebar,
+  SidebarContent,
+  SidebarTrigger,
+} from "@/components/ui/sidebar";
+import { Button } from "@/components/ui/button";
+import { useAuth } from "@/context/AuthContext";
+import {
+  User,
+  LogOut,
+  CreditCard,
+  Settings,
+  LayoutDashboard,
+  Users,
+  FolderKanban,
+} from "lucide-react";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -13,8 +25,8 @@ interface DashboardLayoutProps {
 const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
   const { user, signOut, subscription } = useAuth();
   const navigate = useNavigate();
-  
-  const isAdmin = user?.email === 'admin@example.com';
+
+  const isAdmin = user?.email === "admin@example.com";
 
   return (
     <SidebarProvider>
@@ -25,7 +37,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
               <div className="rounded-md bg-primary p-1">
                 <User className="h-4 w-4 text-primary-foreground" />
               </div>
-              <span>SaaS Platform</span>
+              <span>Vytely</span>
             </div>
           </div>
           <SidebarContent className="flex flex-col h-[calc(100vh-56px)]">
@@ -34,7 +46,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
                 <Button
                   variant="ghost"
                   className="flex items-center gap-3 justify-start px-3 py-2 mb-1"
-                  onClick={() => navigate('/dashboard')}
+                  onClick={() => navigate("/dashboard")}
                 >
                   <LayoutDashboard className="h-4 w-4" />
                   Dashboard
@@ -42,7 +54,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
                 <Button
                   variant="ghost"
                   className="flex items-center gap-3 justify-start px-3 py-2 mb-1"
-                  onClick={() => navigate('/projects')}
+                  onClick={() => navigate("/projects")}
                 >
                   <FolderKanban className="h-4 w-4" />
                   Projects
@@ -50,7 +62,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
                 <Button
                   variant="ghost"
                   className="flex items-center gap-3 justify-start px-3 py-2 mb-1"
-                  onClick={() => navigate('/billing')}
+                  onClick={() => navigate("/billing")}
                 >
                   <CreditCard className="h-4 w-4" />
                   Billing
@@ -58,17 +70,17 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
                 <Button
                   variant="ghost"
                   className="flex items-center gap-3 justify-start px-3 py-2 mb-1"
-                  onClick={() => navigate('/settings')}
+                  onClick={() => navigate("/settings")}
                 >
                   <Settings className="h-4 w-4" />
                   Settings
                 </Button>
-                
+
                 {isAdmin && (
                   <Button
                     variant="ghost"
                     className="flex items-center gap-3 justify-start px-3 py-2 mb-1"
-                    onClick={() => navigate('/admin')}
+                    onClick={() => navigate("/admin")}
                   >
                     <Users className="h-4 w-4" />
                     Admin
@@ -76,7 +88,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
                 )}
               </nav>
             </div>
-            
+
             <div className="border-t p-4">
               <div className="flex items-center gap-3 mb-2">
                 <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted">
@@ -85,12 +97,12 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
                 <div>
                   <div className="text-sm font-medium">{user?.email}</div>
                   <div className="text-xs text-muted-foreground">
-                    {subscription?.plan || 'Free Plan'}
+                    {subscription?.plan || "Free Plan"}
                   </div>
                 </div>
               </div>
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 className="w-full justify-start gap-2"
                 onClick={() => signOut()}
               >
